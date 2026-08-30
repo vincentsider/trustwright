@@ -464,6 +464,62 @@
 .rep-links span {
   color: #46617a;
 }
+.tool-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.tool-item {
+  padding: 13px 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+.tool-item:first-child {
+  border-top: 0;
+}
+.tool-head {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.tool-name {
+  font-family: 'IBM Plex Mono', ui-monospace, monospace;
+  font-size: 13.5px;
+  color: #eaf3ff;
+  font-weight: 600;
+}
+.tool-tag {
+  font-size: 10.5px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: #9db8cf;
+}
+.tool-tag.ok {
+  color: #34d399;
+  border-color: rgba(52, 211, 153, 0.4);
+}
+.tool-tag.warn {
+  color: #fbbf24;
+  border-color: rgba(251, 191, 36, 0.4);
+}
+.tool-desc {
+  margin: 7px 0 0;
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: #b9cbe0;
+}
+.tool-params {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: #7fa8c8;
+}
+.tool-params code {
+  font-family: 'IBM Plex Mono', ui-monospace, monospace;
+  color: #a8c8e0;
+}
 
 /* ── App footer on console pages ──────────────────────────────────────── */
 .app-foot {

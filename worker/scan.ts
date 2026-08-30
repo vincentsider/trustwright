@@ -29,7 +29,7 @@ import { signEd25519, keyId, isSigningConfigured } from './crypto.ts';
 import { scanWithBrowser } from './browserScan.ts';
 import { isBlockedHostname } from './netguard.ts';
 import { analyzeSurface } from '../src/range/mode2.ts';
-import { fingerprintSurface, toolFingerprints } from '../src/range/fingerprint.ts';
+import { fingerprintSurface, toolFingerprints, RESERVED_TOOL_NAMES } from '../src/range/fingerprint.ts';
 import { buildSurfaceReport, sealSurfaceReport } from '../src/range/surfaceReport.ts';
 
 const MAX_URL_LEN = 2048;
@@ -144,6 +144,21 @@ async function mintScannedAudit(req: Request, env: Env, target: { url: string; o
 
   const fingerprint = await fingerprintSurface(tools);
   const toolFps = await toolFingerprints(tools);
+  // Compact list of the audited tools, for the public report page to SHOW what
+  // was scanned. Excludes Trustwright's own injected verify tool (matches the
+  // fingerprinted set). Descriptions are already capped by the scanner.
+  const auditedTools = tools
+    .filter((t) => !RESERVED_TOOL_NAMES.has(t.name))
+    .map((t) => {
+      const props = t.inputSchema && typeof t.inputSchema === 'object' ? (t.inputSchema as { properties?: unknown }).properties : undefined;
+      return {
+        name: t.name,
+        description: typeof t.description === 'string' ? t.description : '',
+        readOnly: (t.annotations as { readOnlyHint?: unknown } | undefined)?.readOnlyHint === true,
+        untrusted: (t.annotations as { untrustedContentHint?: unknown } | undefined)?.untrustedContentHint === true,
+        params: props && typeof props === 'object' ? Object.keys(props as Record<string, unknown>).slice(0, 40) : [],
+      };
+    });
   const audit = await analyzeSurface(tools, { origin: target.origin });
   const ttlDays = Number(env.BADGE_TTL_DAYS ?? '90');
   const expiresAt = new Date(Date.now() + (Number.isFinite(ttlDays) ? ttlDays : 90) * 86_400_000).toISOString();
@@ -157,6 +172,7 @@ async function mintScannedAudit(req: Request, env: Env, target: { url: string; o
       origin: target.origin,
       fingerprint,
       tool_fingerprints: toolFps,
+      tools: auditedTools,
       findings: report.findings,
       assurance_score: report.assuranceScore,
       assurance_rung: report.assuranceRung,

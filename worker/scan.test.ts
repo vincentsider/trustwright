@@ -197,6 +197,12 @@ describe('POST /api/audit/from-scan', () => {
     expect(Array.isArray(tf)).toBe(true);
     expect(tf!.length).toBe(scannedTools.length);
     tf!.forEach((h) => expect(h).toMatch(/^[0-9a-f]{64}$/));
+    // The audited tool list is stored for the public report page: one entry per
+    // scanned tool, each with a name + description.
+    const tl = state.insertBody?.tools as Array<{ name: string; description: string }> | undefined;
+    expect(Array.isArray(tl)).toBe(true);
+    expect(tl!.length).toBe(scannedTools.length);
+    expect(tl!.map((t) => t.name).sort()).toEqual(scannedTools.map((t) => t.name).sort());
   });
 
   it('returns 422 when the verified origin exposes no WebMCP host', async () => {

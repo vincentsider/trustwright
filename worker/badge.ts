@@ -293,6 +293,7 @@ export async function handleReport(req: Request, env: Env): Promise<Response> {
         state,
         fingerprint: a.fingerprint,
         toolCount: Array.isArray(a.tool_fingerprints) ? a.tool_fingerprints.length : null,
+        tools: Array.isArray(a.tools) ? a.tools : [],
         assuranceScore: a.assurance_score,
         assuranceRung: a.assurance_rung,
         flagged: hasFailFinding(a.findings),

@@ -255,11 +255,20 @@ export async function checkBadge(origin: string): Promise<BadgeState | null> {
   }
 }
 
+export interface AuditedTool {
+  name: string;
+  description: string;
+  readOnly?: boolean;
+  untrusted?: boolean;
+  params?: string[];
+}
+
 export interface BadgeReport {
   origin: string;
   state: 'active' | 'revoked' | 'expired' | 'unverified' | 'none';
   fingerprint?: string;
   toolCount?: number | null;
+  tools?: AuditedTool[];
   assuranceScore?: number | null;
   assuranceRung?: number;
   flagged?: boolean;

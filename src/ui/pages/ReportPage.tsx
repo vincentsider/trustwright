@@ -127,6 +127,33 @@ export function ReportPage() {
             </div>
           )}
 
+          {report.state === 'active' && (report.tools?.length ?? 0) > 0 && (
+            <div className="card" style={{ marginTop: 18 }}>
+              <h2 className="rep-h">
+                Tools this site exposes to agents{' '}
+                <span className="muted-3" style={{ fontWeight: 400, fontSize: 13 }}>{report.tools!.length} audited</span>
+              </h2>
+              <ul className="tool-list">
+                {report.tools!.map((t) => (
+                  <li key={t.name} className="tool-item">
+                    <div className="tool-head">
+                      <code className="tool-name">{t.name}</code>
+                      {t.readOnly && <span className="tool-tag ok">read-only</span>}
+                      {!t.readOnly && <span className="tool-tag warn">can change state</span>}
+                      {t.untrusted && <span className="tool-tag">returns untrusted content</span>}
+                    </div>
+                    {t.description && <p className="tool-desc">{t.description}</p>}
+                    {t.params && t.params.length > 0 && (
+                      <p className="tool-params">
+                        params: <code>{t.params.join(', ')}</code>
+                      </p>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
           {report.state === 'active' && (
             <div className="card" style={{ marginTop: 18 }}>
               <h2 className="rep-h">
