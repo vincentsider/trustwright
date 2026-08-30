@@ -17,6 +17,7 @@ An AI agent visiting trustwright.deepblocker.ai can DRIVE Trustwright directly o
 - `trustwright_scan_site(url)` — audit any site's agent tools and return an unsigned report of red flags.
 - `trustwright_check_badge(origin)` — return a site's live, signed badge status, audited tool fingerprint, and assurance score.
 - `trustwright_what_is_tested()` — explain Trustwright and the classes of tool-surface attack it audits against.
+- `trustwright_test_agent()` — return the interactive Range URL and a structured self-test protocol for evaluating whether an agent resists tool-surface attacks.
 - `trustwright_start_verification(origin)` — begin earning a badge for a site you control (returns a proof token and where to publish it).
 
 Every site that embeds Trustwright's badge.js also exposes `trustwright_verify_badge()`, so an agent on ANY badged site can ask the page to prove what its badge certifies and how to check it independently (public key at /api/pubkey, signature algorithm Ed25519).
