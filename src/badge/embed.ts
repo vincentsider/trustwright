@@ -276,6 +276,11 @@ function registerVerifyTool(
 ): boolean {
   const reg = (host as RegisterableHost | null)?.registerTool;
   if (typeof reg !== 'function') return false;
+  // One registration per page: a site can mount several badge surfaces (each
+  // its own script instance), but the tool is page-global, and a second
+  // register of the same name is what native hosts reject.
+  const w = window as Window & { __twVerifyToolRegistered?: boolean };
+  if (w.__twVerifyToolRegistered) return true;
   const s = state as { assuranceScore?: number | null; fingerprint?: string; signedAt?: string };
   const staticInfo = {
     badge: 'Trustwright — trust layer for the WebMCP agent web',
@@ -314,14 +319,21 @@ function registerVerifyTool(
     );
   };
   try {
-    void reg.call(host, {
-      name: 'trustwright_verify_badge',
-      description:
-        "Return this site's Trustwright verification badge: what it certifies about the site's agent tools, the live verdict right now, and how to check it independently.",
-      inputSchema: { type: 'object', properties: {} },
-      annotations: { readOnlyHint: true },
-      execute,
-    });
+    // Chrome's NATIVE registerTool returns a promise that can reject
+    // asynchronously; the try only covers a sync throw, so an unabsorbed
+    // rejection surfaces as an unhandledrejection on the HOST page
+    // (Sentry d100a902, openclawcity.ai, 30 Aug).
+    void Promise.resolve(
+      reg.call(host, {
+        name: 'trustwright_verify_badge',
+        description:
+          "Return this site's Trustwright verification badge: what it certifies about the site's agent tools, the live verdict right now, and how to check it independently.",
+        inputSchema: { type: 'object', properties: {} },
+        annotations: { readOnlyHint: true },
+        execute,
+      }),
+    ).catch(() => {});
+    w.__twVerifyToolRegistered = true;
     return true;
   } catch {
     return false; // host rejected the registration — the badge still renders
