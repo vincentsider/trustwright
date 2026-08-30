@@ -171,6 +171,38 @@ describe('surface fingerprint — only the injected verify tool is reserved', ()
   });
 });
 
+// --- Schema skeleton: a dynamic enum must not move the hash (myprovence) ----
+//
+// webmcp.myprovence.fr's `pin_visible_place` has an inputSchema `enum` of the
+// currently-visible place names, which changes every time the map moves. Hashing
+// it flipped the badge to "tools changed" mid-session. The CONTRACT (param names,
+// types, required) is kept; the volatile value lists (enum/const/default/examples)
+// are dropped, so benign runtime change is invisible while a real param change is
+// still caught.
+describe('surface fingerprint — volatile schema values are dropped', () => {
+  const withEnum = (vals: string[]): RegisteredTool[] => [
+    { name: 'pin', description: 'pin a visible place', inputSchema: { type: 'object', properties: { name: { type: 'string', enum: vals } }, required: ['name'] } },
+  ];
+
+  it('the same tool with a DIFFERENT enum list hashes identically', async () => {
+    expect(await fingerprintSurface(withEnum(['A', 'B', 'C']))).toBe(await fingerprintSurface(withEnum(['X', 'Y'])));
+  });
+
+  it('const / default / examples are dropped too', async () => {
+    const a: RegisteredTool[] = [{ name: 't', description: 'x', inputSchema: { type: 'object', properties: { k: { type: 'string', const: 'now', default: 'now', examples: ['a'] } } } }];
+    const b: RegisteredTool[] = [{ name: 't', description: 'x', inputSchema: { type: 'object', properties: { k: { type: 'string', const: 'later', default: 'later', examples: ['b', 'c'] } } } }];
+    expect(await fingerprintSurface(a)).toBe(await fingerprintSurface(b));
+  });
+
+  it('but a changed param NAME or TYPE still changes the hash (contract is kept)', async () => {
+    const base: RegisteredTool[] = [{ name: 't', description: 'x', inputSchema: { type: 'object', properties: { name: { type: 'string', enum: ['A'] } }, required: ['name'] } }];
+    const renamed: RegisteredTool[] = [{ name: 't', description: 'x', inputSchema: { type: 'object', properties: { place: { type: 'string', enum: ['A'] } }, required: ['place'] } }];
+    const retyped: RegisteredTool[] = [{ name: 't', description: 'x', inputSchema: { type: 'object', properties: { name: { type: 'number' } }, required: ['name'] } }];
+    expect(await fingerprintSurface(renamed)).not.toBe(await fingerprintSurface(base));
+    expect(await fingerprintSurface(retyped)).not.toBe(await fingerprintSurface(base));
+  });
+});
+
 // --- Per-tool fingerprints: the subset live-check (dynamic surfaces) --------
 //
 // A byte-exact match of the WHOLE surface flips honest DYNAMIC sites (which add

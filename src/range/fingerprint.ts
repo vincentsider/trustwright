@@ -124,6 +124,29 @@ function parseHostJson(v: unknown): unknown {
   }
 }
 
+// Schema keys whose VALUES are runtime content, not the tool's input contract:
+// a JSON-Schema `enum`/`const` list, or `default`/`examples`. Sites legitimately
+// make these DYNAMIC — webmcp.myprovence.fr's `pin_visible_place` has an `enum`
+// of the currently-visible place names, which changes every time the map moves,
+// so hashing it flipped an honest badge to "tools changed" the moment an agent
+// interacted. The CONTRACT (which params exist, their types, which are required)
+// is what a swap attack would change, and that is kept — only the volatile value
+// lists are dropped, so the fingerprint is stable under benign runtime change.
+const VOLATILE_SCHEMA_KEYS = new Set(['enum', 'const', 'default', 'examples']);
+
+function stripVolatileSchema(v: unknown): unknown {
+  if (Array.isArray(v)) return v.map(stripVolatileSchema);
+  if (v && typeof v === 'object') {
+    const out: Record<string, unknown> = {};
+    for (const [k, val] of Object.entries(v as Record<string, unknown>)) {
+      if (VOLATILE_SCHEMA_KEYS.has(k)) continue;
+      out[k] = stripVolatileSchema(val);
+    }
+    return out;
+  }
+  return v;
+}
+
 /** Keep only primitive annotation values (drops nested/host junk); cap keys+strings.
  *
  * A `false` boolean hint is DROPPED: for advisory MCP hints (`readOnlyHint`,
@@ -166,10 +189,13 @@ export function canonicalizeTool(raw: unknown): FingerprintTool | null {
   // parseHostJson: a native host may serialise the schema to a JSON string.
   const schema = plainObject(parseHostJson(o.inputSchema));
   if (schema) {
+    // Drop volatile value lists (enum/const/default/examples) so a dynamic enum
+    // never moves the hash; keep the structural contract.
+    const skeleton = stripVolatileSchema(schema);
     try {
       // JSON.stringify also rejects a cyclic schema (throws) — dropped on both
       // sides identically, so a host-stamped cycle can never split the hash.
-      if (JSON.stringify(schema).length <= FP_MAX_SCHEMA_CHARS) inputSchema = schema;
+      if (JSON.stringify(skeleton).length <= FP_MAX_SCHEMA_CHARS) inputSchema = skeleton;
     } catch {
       /* unserialisable / cyclic — drop it */
     }
@@ -266,7 +292,7 @@ export async function toolFingerprints(tools: ReadonlyArray<unknown>): Promise<s
  *  openclawcity.ai). Real sites declare no `false` hints, so their existing
  *  seals are unchanged; only the golden vector (which carries an explicit
  *  readOnlyHint:false to exercise the rule) moves. */
-export const FINGERPRINT_ALGO = 'sha256/v3-host-independent-hints';
+export const FINGERPRINT_ALGO = 'sha256/v4-schema-skeleton';
 
 /** A fixed reference surface whose fingerprint is pinned below. */
 export const FINGERPRINT_GOLDEN_SURFACE: RegisteredTool[] = [
