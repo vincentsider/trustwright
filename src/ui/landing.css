@@ -152,9 +152,11 @@
 .btn {
   display: inline-flex;
   align-items: center;
-  font-size: clamp(17px, 1.5vw, 20px);
+  justify-content: center;
+  font-size: clamp(20px, 2vw, 26px);
   font-weight: 600;
-  padding: 17px 40px;
+  padding: 24px 60px;
+  min-width: 240px;
   border-radius: 980px;
   text-decoration: none;
   border: 1px solid transparent;
