@@ -149,7 +149,10 @@
 .hero-badge:empty {
   min-height: 0;
 }
-.btn {
+/* Scoped to .lp so these win over the generic console `.btn` in theme.css
+   (same single-class specificity, theme.css loads later). The landing CTAs are
+   large pills; console buttons keep their compact style. */
+.lp .btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
