@@ -92,14 +92,50 @@ function plainObject(v: unknown): Record<string, unknown> | undefined {
   return v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : undefined;
 }
 
-/** Keep only primitive annotation values (drops nested/host junk); cap keys+strings. */
+/**
+ * Host-shape normaliser. A native WebMCP host may hand `inputSchema` (and
+ * potentially `annotations`) back as a JSON STRING rather than an object —
+ * Chrome's native host serialises `inputSchema` to a string, while the polyfill
+ * and the headless scanner keep it an object. If we did not parse it, the schema
+ * would be DROPPED on the native host (plainObject rejects a string) but KEPT on
+ * the polyfill, so the SAME declared tools would hash differently per browser
+ * and an honest badge would flip to "tools changed" for native-host visitors
+ * (found in the field by customer zero, openclawcity.ai). Parsing a JSON-object
+ * string back to its object makes the fingerprint host-INDEPENDENT. A value that
+ * is already an object passes through unchanged (so object-schema tools — the
+ * golden vector and every existing mint — hash exactly as before); a non-JSON or
+ * non-object string is returned as-is for the caller's plainObject to drop.
+ */
+function parseHostJson(v: unknown): unknown {
+  if (typeof v !== 'string') return v;
+  try {
+    const parsed: unknown = JSON.parse(v);
+    return parsed && typeof parsed === 'object' ? parsed : v;
+  } catch {
+    return v;
+  }
+}
+
+/** Keep only primitive annotation values (drops nested/host junk); cap keys+strings.
+ *
+ * A `false` boolean hint is DROPPED: for advisory MCP hints (`readOnlyHint`,
+ * `untrustedContentHint`, …) `false` is the DEFAULT, semantically identical to
+ * the hint being absent. A native host stamps these defaults explicitly where
+ * the site declared nothing (Chrome adds `untrustedContentHint:false`), while
+ * the polyfill and the raw scanner read omit them — so keeping `false` in the
+ * hash made the SAME declared tool fingerprint differently per host and flipped
+ * an honest badge to "tools changed" for native-host visitors (customer zero,
+ * openclawcity.ai). Only a `true` hint is a positive claim (the read-only lie we
+ * detect), so dropping `false` loses no security signal: flipping a hint to
+ * `true`, or removing a `true`, still changes the hash. */
 function safeAnnotations(v: unknown): Record<string, unknown> | null {
   const o = plainObject(v);
   if (!o) return null;
   const out: Record<string, unknown> = {};
   for (const [k, val] of Object.entries(o)) {
     if (k.length > FP_MAX_ANNOTATION_KEY) continue;
-    if (typeof val === 'boolean' || typeof val === 'number') out[k] = val;
+    if (val === true) out[k] = true; // false is the default ⇒ dropped (host-independent)
+    else if (typeof val === 'number') out[k] = val;
     else if (typeof val === 'string') out[k] = val.slice(0, FP_MAX_ANNOTATION_STR);
   }
   return Object.keys(out).length ? out : null;
@@ -119,7 +155,8 @@ export function canonicalizeTool(raw: unknown): FingerprintTool | null {
   if (name.startsWith(RESERVED_TOOL_PREFIX)) return null; // Trustwright's own tools never enter the hash
   const description = normalizeWhitespace(typeof o.description === 'string' ? o.description.slice(0, FP_MAX_DESC) : '');
   let inputSchema: unknown = null;
-  const schema = plainObject(o.inputSchema);
+  // parseHostJson: a native host may serialise the schema to a JSON string.
+  const schema = plainObject(parseHostJson(o.inputSchema));
   if (schema) {
     try {
       // JSON.stringify also rejects a cyclic schema (throws) — dropped on both
@@ -129,7 +166,9 @@ export function canonicalizeTool(raw: unknown): FingerprintTool | null {
       /* unserialisable / cyclic — drop it */
     }
   }
-  return { name, description, inputSchema, annotations: safeAnnotations(o.annotations) };
+  // annotations likewise: parse a stringified object so a host that serialises
+  // them does not silently drop the readOnly/untrustedContent hints from the hash.
+  return { name, description, inputSchema, annotations: safeAnnotations(parseHostJson(o.annotations)) };
 }
 
 /** Map tools to the canonical fingerprint shape, dropping unusable entries. */
@@ -189,8 +228,16 @@ export async function fingerprintSurface(tools: ReadonlyArray<unknown>): Promise
 // you change the canonical form on purpose, then rebuild and redeploy the
 // worker and badge.js TOGETHER (`npm run deploy`, never a bare `wrangler deploy`).
 
-/** Canonical-form version. Changes here are deliberate, versioned events. */
-export const FINGERPRINT_ALGO = 'sha256/v2-no-host-decoration';
+/** Canonical-form version. Changes here are deliberate, versioned events.
+ *  v3: host-independent hints — a native host serialises `inputSchema` to a JSON
+ *  string and stamps default `false` boolean hints (e.g. untrustedContentHint)
+ *  the site never declared. v3 parses the string schema back to an object and
+ *  drops `false` hints so the same declared tools hash identically whether read
+ *  through the native host, the polyfill, or the scanner (customer zero,
+ *  openclawcity.ai). Real sites declare no `false` hints, so their existing
+ *  seals are unchanged; only the golden vector (which carries an explicit
+ *  readOnlyHint:false to exercise the rule) moves. */
+export const FINGERPRINT_ALGO = 'sha256/v3-host-independent-hints';
 
 /** A fixed reference surface whose fingerprint is pinned below. */
 export const FINGERPRINT_GOLDEN_SURFACE: RegisteredTool[] = [
@@ -208,5 +255,7 @@ export const FINGERPRINT_GOLDEN_SURFACE: RegisteredTool[] = [
   },
 ];
 
-/** Expected fingerprint of FINGERPRINT_GOLDEN_SURFACE under the current algo. */
-export const FINGERPRINT_GOLDEN_HASH = 'e7dc8eab2b7ee0b120cabb3e3ded3f6423a67ccb4d0de1e996b31640c500761b';
+/** Expected fingerprint of FINGERPRINT_GOLDEN_SURFACE under the current algo.
+ *  v3 value: post_comment's declared `readOnlyHint:false` is now dropped as the
+ *  default, so the pinned hash moved from the v2 e7dc8eab… on the SAME surface. */
+export const FINGERPRINT_GOLDEN_HASH = 'e3ebacd342e03dd4b4741011d7277531bcbb67210eac6915e42bde91b4c431eb';

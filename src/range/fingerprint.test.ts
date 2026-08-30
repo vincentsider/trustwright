@@ -159,6 +159,76 @@ describe('surface fingerprint — reserved trustwright_ tools are excluded', () 
   });
 });
 
+// --- Host-independent hints (customer zero, openclawcity.ai) ---------------
+//
+// A native WebMCP host (Chrome, once the origin trial is on) serialises
+// `inputSchema` to a JSON STRING and stamps default `false` boolean hints
+// (e.g. untrustedContentHint:false) the site never declared. The polyfill and
+// the scanner read the clean object schema and omit the false hints. The badge
+// only verifies if the fingerprint is identical across these reads — so a
+// string schema must parse back, and a `false` hint must equal its absence,
+// exactly the divergence that flipped openclawcity's badge to "tools changed".
+describe('surface fingerprint — host-independent hints (openclawcity)', () => {
+  it('a JSON-STRING inputSchema hashes identically to the object form', async () => {
+    const asObject: RegisteredTool[] = [
+      { name: 'q', description: 'x', inputSchema: { type: 'object', properties: { a: { type: 'string' } }, required: ['a'] } },
+    ];
+    const asString = [
+      { name: 'q', description: 'x', inputSchema: JSON.stringify({ type: 'object', properties: { a: { type: 'string' } }, required: ['a'] }) },
+    ] as unknown as RegisteredTool[];
+    expect(await fingerprintSurface(asString)).toBe(await fingerprintSurface(asObject));
+  });
+
+  it('a declared readOnlyHint:false hashes identically to omitting it', async () => {
+    const withFalse: RegisteredTool[] = [{ name: 't', description: 'x', annotations: { readOnlyHint: false } }];
+    const without: RegisteredTool[] = [{ name: 't', description: 'x' }];
+    expect(await fingerprintSurface(withFalse)).toBe(await fingerprintSurface(without));
+  });
+
+  it('a host-added untrustedContentHint:false does not change the hash', async () => {
+    const declared: RegisteredTool[] = [{ name: 't', description: 'x', annotations: { readOnlyHint: true } }];
+    const hostStamped: RegisteredTool[] = [
+      { name: 't', description: 'x', annotations: { readOnlyHint: true, untrustedContentHint: false } },
+    ];
+    expect(await fingerprintSurface(hostStamped)).toBe(await fingerprintSurface(declared));
+  });
+
+  it('a true hint is KEPT — flipping a hint to true still changes the hash', async () => {
+    const off: RegisteredTool[] = [{ name: 't', description: 'x', annotations: { untrustedContentHint: false } }];
+    const on: RegisteredTool[] = [{ name: 't', description: 'x', annotations: { untrustedContentHint: true } }];
+    expect(await fingerprintSurface(on)).not.toBe(await fingerprintSurface(off));
+  });
+
+  it('a full native-host view (string schema + stamps + false hints) equals the clean declared surface', async () => {
+    // The clean, site-declared surface (what the scanner/polyfill reads).
+    const declared: RegisteredTool[] = [
+      {
+        name: 'read_city_guide',
+        description: "Read the city's own manual for agents.",
+        inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+        annotations: { readOnlyHint: true },
+      },
+    ];
+    // The SAME tool as a real Chrome native host hands it back: schema as a
+    // string, an added untrustedContentHint:false default, and origin/title/
+    // window stamps.
+    const win: Record<string, unknown> = {};
+    win.self = win;
+    const nativeView = [
+      {
+        name: 'read_city_guide',
+        description: "Read the city's own manual for agents.",
+        inputSchema: JSON.stringify({ type: 'object', properties: {}, additionalProperties: false }),
+        annotations: { readOnlyHint: true, untrustedContentHint: false },
+        origin: 'https://openclawcity.ai',
+        title: 'City guide',
+        window: win,
+      },
+    ] as unknown as RegisteredTool[];
+    expect(await fingerprintSurface(nativeView)).toBe(await fingerprintSurface(declared));
+  });
+});
+
 // --- Shared references (DAG, not a cycle) are structural, not identity -----
 //
 // The circular guard is PATH-SCOPED: it breaks only an object that is its own

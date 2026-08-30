@@ -112,14 +112,33 @@ function plainObject(v: unknown): Record<string, unknown> | undefined {
   return v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : undefined;
 }
 
-/** Keep only boolean/string/number annotation values (drops nested junk). */
+/** Parse a JSON-object STRING back to its object (a native host serialises the
+ *  schema to a string). Mirrors fingerprint.ts's parseHostJson so mint and
+ *  verify read the identical shape; a non-object/non-JSON value is returned as-is. */
+function parseHostJson(v: unknown): unknown {
+  if (typeof v !== 'string') return v;
+  try {
+    const parsed: unknown = JSON.parse(v);
+    return parsed && typeof parsed === 'object' ? parsed : v;
+  } catch {
+    return v;
+  }
+}
+
+/** Keep only true-boolean/string/number annotation values (drops nested junk and
+ *  `false` hints). A `false` advisory hint is the default (== absent); a native
+ *  host stamps it explicitly where the site declared nothing, so dropping it
+ *  keeps the mint's surface host-independent and in lockstep with the
+ *  fingerprint canonicaliser (src/range/fingerprint.ts safeAnnotations). See
+ *  there for the full rationale (customer zero, openclawcity.ai). */
 function safeAnnotations(v: unknown): Record<string, unknown> | undefined {
   const o = plainObject(v);
   if (!o) return undefined;
   const out: Record<string, unknown> = {};
   for (const [k, val] of Object.entries(o)) {
     if (k.length > 64) continue;
-    if (typeof val === 'boolean' || typeof val === 'number') out[k] = val;
+    if (val === true) out[k] = true; // false ⇒ dropped (default == absent)
+    else if (typeof val === 'number') out[k] = val;
     else if (typeof val === 'string') out[k] = val.slice(0, 256);
   }
   return Object.keys(out).length ? out : undefined;
@@ -140,7 +159,7 @@ export function normalizeSurface(raw: RawScan): { host: ScanHost; tools: NormalT
     if (!name) continue;
     const description = typeof o.description === 'string' ? o.description.slice(0, MAX_DESC) : '';
     const tool: NormalTool = { name, description };
-    const schema = plainObject(o.inputSchema);
+    const schema = plainObject(parseHostJson(o.inputSchema));
     if (schema) {
       try {
         if (JSON.stringify(schema).length <= MAX_SCHEMA_CHARS) tool.inputSchema = schema;
@@ -148,7 +167,7 @@ export function normalizeSurface(raw: RawScan): { host: ScanHost; tools: NormalT
         /* unserialisable — drop it */
       }
     }
-    const ann = safeAnnotations(o.annotations);
+    const ann = safeAnnotations(parseHostJson(o.annotations));
     if (ann) tool.annotations = ann;
     tools.push(tool);
   }
