@@ -39,6 +39,7 @@ import { sendReportEmail, isEmailConfigured } from './email.ts';
 import { checkRate, underDailyCap, clientIp } from './limits.ts';
 import { analyzeAudio, warmDetector, MAX_AUDIO_BYTES } from './detector.ts';
 import { runOwnershipRecheck } from './maintenance.ts';
+import { getOrigin } from './audits.ts';
 
 async function readJson(req: Request): Promise<unknown> {
   try {
@@ -201,6 +202,22 @@ export default {
       if (url.pathname === '/api/manifest' && req.method === 'POST') return handleManifest(req, env);
       if (url.pathname === '/api/manifest' && req.method === 'GET') return handleGetManifest(req, env);
       return json({ error: 'not_found' }, { status: 404, req, env });
+    }
+
+    // Ownership-proof file for THIS worker's own origin(s) — dogfooding: it lets
+    // trustwright.deepblocker.ai prove control of itself so it can carry its own
+    // badge, and keeps the hourly re-check from revoking it. Serves the stored
+    // challenge_token for `https://<host>` as text/plain; 404 if none. Only the
+    // origins this worker serves can be answered here, so it grants nothing to
+    // anyone else.
+    if (url.pathname === '/.well-known/trustwright-challenge.txt' && req.method === 'GET') {
+      const o = await getOrigin(env, `https://${url.host}`);
+      if (o?.challenge_token) {
+        return new Response(o.challenge_token, {
+          headers: { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' },
+        });
+      }
+      return new Response('not found', { status: 404 });
     }
 
     // Everything else is the SPA. not_found_handling=single-page-application

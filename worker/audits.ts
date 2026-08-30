@@ -90,6 +90,7 @@ export async function unverifyOrigin(env: Env, origin: string): Promise<void> {
 export interface AuditInsert {
   origin: string;
   fingerprint: string;
+  tool_fingerprints?: string[] | null;
   findings: unknown;
   assurance_score: number | null;
   assurance_rung: number;
@@ -116,6 +117,7 @@ export interface AuditRow {
   id: string;
   origin: string;
   fingerprint: string;
+  tool_fingerprints: string[] | null;
   findings: unknown;
   assurance_score: number | null;
   assurance_rung: number;
@@ -131,7 +133,7 @@ export interface AuditRow {
 export async function getLatestAudit(env: Env, origin: string): Promise<AuditRow | null> {
   const q =
     `tool_audits?origin=eq.${encodeURIComponent(origin)}` +
-    '&select=id,origin,fingerprint,findings,assurance_score,assurance_rung,report_sha256,signature,key_id,signed_at,expires_at,revoked_at' +
+    '&select=id,origin,fingerprint,tool_fingerprints,findings,assurance_score,assurance_rung,report_sha256,signature,key_id,signed_at,expires_at,revoked_at' +
     '&order=signed_at.desc&limit=1';
   const resp = await fetch(sbUrl(env, q), { headers: sbHeaders(env) });
   if (!resp.ok) return null;

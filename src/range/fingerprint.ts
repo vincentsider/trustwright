@@ -221,6 +221,27 @@ export async function fingerprintSurface(tools: ReadonlyArray<unknown>): Promise
   return toHex(digest);
 }
 
+/**
+ * Per-tool fingerprints (deduplicated, sorted): a SHA-256 over EACH canonical
+ * tool. This is what lets the live badge tolerate a legitimately DYNAMIC surface
+ * — a site that registers an extra tool at runtime (e.g. one whose options
+ * depend on live app state) — without flipping to "tools changed". The badge
+ * verifies that every SEALED tool hash is still present in the live set (each
+ * audited tool intact, none removed or swapped) and treats any EXTRA live tool
+ * as un-audited, not as tampering. Reserved trustwright_ tools are excluded,
+ * exactly like the aggregate fingerprint. Sorted + deduped so the array is
+ * itself deterministic.
+ */
+export async function toolFingerprints(tools: ReadonlyArray<unknown>): Promise<string[]> {
+  const subtle = globalThis.crypto?.subtle;
+  if (!subtle) throw new Error('Web Crypto (crypto.subtle) is required to compute tool fingerprints');
+  const canon = toFingerprintTools(tools).map((t) => stableStringify(t));
+  const hashes = await Promise.all(
+    canon.map(async (s) => toHex(await subtle.digest('SHA-256', new TextEncoder().encode(s)))),
+  );
+  return [...new Set(hashes)].sort();
+}
+
 // --- Drift sentinel (Bug 2) -----------------------------------------------
 //
 // The worker (mint + scan) and the browser badge.js both import THIS module,

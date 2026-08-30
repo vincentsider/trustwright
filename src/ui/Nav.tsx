@@ -31,6 +31,10 @@ export function Nav() {
           <a href={GITHUB} target="_blank" rel="noopener noreferrer" className="nav-link">
             GitHub
           </a>
+          {/* Trustwright's OWN live badge — dogfooding, at the top on every page.
+              badge.js (loaded in index.html with data-mount="#tw-self-badge")
+              renders the signed, live-checked verdict for this very origin here. */}
+          <span id="tw-self-badge" className="nav-self-badge" aria-label="Trustwright verification badge" />
         </div>
       </div>
     </nav>

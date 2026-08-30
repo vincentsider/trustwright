@@ -300,6 +300,15 @@ input.field:focus {
   gap: clamp(16px, 2.4vw, 34px);
   flex-wrap: wrap;
 }
+/* Mount point for Trustwright's own badge in the nav (badge.js renders into it).
+   Empty until the badge loads, so it takes no space and never shifts the layout. */
+.nav-self-badge {
+  display: inline-flex;
+  align-items: center;
+}
+.nav-self-badge:empty {
+  display: none;
+}
 .nav-link {
   font-size: 11px;
   letter-spacing: 0.16em;

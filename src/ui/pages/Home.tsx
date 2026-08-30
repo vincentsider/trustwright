@@ -49,6 +49,9 @@ export function Home() {
               Test your agent
             </Link>
           </div>
+          {/* Trustwright's own live badge, front and centre in the hero — we hold
+              this very site to the standard. badge.js (index.html) mounts here. */}
+          <div id="tw-hero-badge" className="hero-badge" data-reveal />
         </div>
       </section>
 

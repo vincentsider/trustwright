@@ -138,6 +138,17 @@
   justify-content: center;
   margin-top: 32px;
 }
+/* Trustwright's own live badge in the hero (badge.js renders into it). Centered,
+   with breathing room under the CTAs. Empty until it loads, so no layout shift. */
+.hero-badge {
+  display: flex;
+  justify-content: center;
+  margin-top: 28px;
+  min-height: 34px;
+}
+.hero-badge:empty {
+  min-height: 0;
+}
 .btn {
   display: inline-flex;
   align-items: center;

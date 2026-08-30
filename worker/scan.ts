@@ -29,7 +29,7 @@ import { signEd25519, keyId, isSigningConfigured } from './crypto.ts';
 import { scanWithBrowser } from './browserScan.ts';
 import { isBlockedHostname } from './netguard.ts';
 import { analyzeSurface } from '../src/range/mode2.ts';
-import { fingerprintSurface } from '../src/range/fingerprint.ts';
+import { fingerprintSurface, toolFingerprints } from '../src/range/fingerprint.ts';
 import { buildSurfaceReport, sealSurfaceReport } from '../src/range/surfaceReport.ts';
 
 const MAX_URL_LEN = 2048;
@@ -143,10 +143,11 @@ async function mintScannedAudit(req: Request, env: Env, target: { url: string; o
   if (!tools) return jsonPublic({ error: 'scan_bad_surface' }, { status: 502, req });
 
   const fingerprint = await fingerprintSurface(tools);
+  const toolFps = await toolFingerprints(tools);
   const audit = await analyzeSurface(tools, { origin: target.origin });
   const ttlDays = Number(env.BADGE_TTL_DAYS ?? '90');
   const expiresAt = new Date(Date.now() + (Number.isFinite(ttlDays) ? ttlDays : 90) * 86_400_000).toISOString();
-  const report = buildSurfaceReport(audit, fingerprint, target.origin, new Date().toISOString(), 0);
+  const report = buildSurfaceReport(audit, fingerprint, target.origin, new Date().toISOString(), 0, toolFps);
   const sealed = await sealSurfaceReport(report);
   const signature = await signEd25519(env, sealed.canonical);
 
@@ -155,6 +156,7 @@ async function mintScannedAudit(req: Request, env: Env, target: { url: string; o
     inserted = await insertAudit(env, {
       origin: target.origin,
       fingerprint,
+      tool_fingerprints: toolFps,
       findings: report.findings,
       assurance_score: report.assuranceScore,
       assurance_rung: report.assuranceRung,

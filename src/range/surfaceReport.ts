@@ -18,6 +18,10 @@ export interface SurfaceReport {
   version: '1';
   origin: string;
   fingerprint: string;
+  /** Per-tool fingerprints of the sealed surface (sorted). Lets the live badge
+   *  verify each audited tool is still present/unchanged while tolerating an
+   *  extra tool a dynamic site adds at runtime. Absent on pre-v1.1 reports. */
+  toolFingerprints?: string[];
   assuranceScore: number | null;
   assuranceRung: AssuranceRung;
   findings: Array<{
@@ -49,9 +53,10 @@ export function scopeStatement(generatedAt: string, fingerprint: string): string
     "Trustwright audits this site's agent-tool surface: what these tools declare " +
     '(names, descriptions, input schemas, safety hints, cross-origin exposure) and, ' +
     'where the owner authorised it, what they observably do from the browser. It is ' +
-    'verified live against the exact tool set present at page load; if the tools ' +
-    'change, this seal stops applying. It does not certify server-side behaviour, ' +
-    `which cannot be observed from the client. Audited ${date}; fingerprint ${short}.`
+    'verified live against the audited tools present at page load: if an audited ' +
+    'tool is removed or changed, this seal stops applying (a tool the site adds at ' +
+    'runtime is reported as un-audited, not as tampering). It does not certify ' +
+    `server-side behaviour, which cannot be observed from the client. Audited ${date}; fingerprint ${short}.`
   );
 }
 
@@ -62,12 +67,14 @@ export function buildSurfaceReport(
   origin: string,
   generatedAtIso: string,
   assuranceRung: AssuranceRung = 0,
+  toolFingerprints?: string[],
 ): SurfaceReport {
   return {
     kind: 'surface-audit',
     version: '1',
     origin,
     fingerprint,
+    ...(toolFingerprints ? { toolFingerprints } : {}),
     assuranceScore: audit.scorecard.resistanceScore,
     assuranceRung,
     findings: audit.findings.map((f) => ({
@@ -89,6 +96,9 @@ export function canonicalSurfaceReport(report: SurfaceReport): string {
     version: report.version,
     origin: report.origin,
     fingerprint: report.fingerprint,
+    // Included ONLY when present, so pre-v1.1 reports (no per-tool hashes) hash
+    // exactly as before and their existing seals stay valid.
+    ...(report.toolFingerprints ? { toolFingerprints: report.toolFingerprints } : {}),
     assuranceScore: report.assuranceScore,
     assuranceRung: report.assuranceRung,
     findings: report.findings.map((f) => ({

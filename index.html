@@ -66,6 +66,11 @@
          Trustwright over WebMCP (scan, check a badge, start verification) instead
          of scraping the page. Same-origin, so it satisfies the CSP. -->
     <script src="/agent-tools.js"></script>
+    <!-- Dogfooding: Trustwright displays its OWN signed, live-checked badge — in
+         the hero and in the nav (top of every page). Each mounts into a React-
+         rendered element; badge.js waits for it. Same-origin, so CSP-clean. -->
+    <script src="/badge.js" data-origin="https://trustwright.deepblocker.ai" data-mount="#tw-hero-badge"></script>
+    <script src="/badge.js" data-origin="https://trustwright.deepblocker.ai" data-mount="#tw-self-badge" data-variant="compact"></script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

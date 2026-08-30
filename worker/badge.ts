@@ -91,6 +91,10 @@ export type BadgeState =
       origin: string;
       state: 'active';
       fingerprint: string;
+      /** Per-tool fingerprints of the sealed surface (sorted). The live badge
+       *  verifies every one is still present; an added tool is tolerated. Null
+       *  on pre-0007 audits, where the badge falls back to exact aggregate match. */
+      toolFingerprints: string[] | null;
       assuranceScore: number | null;
       assuranceRung: number;
       /** True when the signed audit recorded a confirmed FAIL — the badge must
@@ -128,6 +132,7 @@ export async function computeBadgeState(env: Env, origin: string): Promise<Badge
     origin,
     state: 'active',
     fingerprint: a.fingerprint,
+    toolFingerprints: a.tool_fingerprints ?? null,
     assuranceScore: a.assurance_score,
     assuranceRung: rung,
     flagged: hasFailFinding(a.findings),

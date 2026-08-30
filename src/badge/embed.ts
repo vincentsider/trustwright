@@ -20,8 +20,15 @@
 // The tone/label always come from decideBadge, so a site can restyle or reposition
 // the badge but can never make it claim more than the signed, live-checked state.
 
-import { fingerprintSurface } from '../range/fingerprint.ts';
-import { decideBadge, displayWithGrace, type BadgeDisplay, type BadgeStateJson, type Tone } from './decide.ts';
+import { fingerprintSurface, toolFingerprints } from '../range/fingerprint.ts';
+import {
+  decideBadgeLive,
+  displayWithGraceLive,
+  type BadgeDisplay,
+  type BadgeStateJson,
+  type LiveCheck,
+  type Tone,
+} from './decide.ts';
 import type { RegisteredTool } from '../webmcp/types.ts';
 
 // Capture the script element synchronously — document.currentScript is null after
@@ -170,19 +177,11 @@ async function run(): Promise<void> {
   const theme: Theme = themeAttr === 'dark' || themeAttr === 'auto' ? themeAttr : 'light';
   const compact = scriptEl?.dataset.variant === 'compact';
 
-  const readLive = async (host: { getTools(): Promise<RegisteredTool[]> }): Promise<string | null> => {
-    try {
-      return await fingerprintSurface(await host.getTools());
-    } catch {
-      return null;
-    }
-  };
-
   const host0 = nativeHost();
-  const live0 = host0 ? await readLive(host0) : null;
+  const live0: LiveCheck = host0 ? await readLiveCheck(host0, state) : { host: false };
 
   const target = await resolveMount();
-  const paint = render(target, apiBase, origin, displayWithGrace(state, live0, false), { theme, compact });
+  const paint = render(target, apiBase, origin, displayWithGraceLive(state, live0, false), { theme, compact });
 
   // Make the badge machine-verifiable on EVERY badged site: register a WebMCP
   // tool an agent can call to get the signed verdict + how to check it. Named in
@@ -198,12 +197,14 @@ async function run(): Promise<void> {
   //       EVERY badge state, so even a revoked/expired/unverified badge stays
   //       agent-checkable (not just the active case);
   //   (b) for an active badge, upgrade the verdict to the live "tools verified"
-  //       once the on-page tools match the audit (else it sits on the weaker
+  //       once the audited tools are all present (else it sits on the weaker
   //       "tools audited" — the race first seen on deepblocker.ai).
   // Bounded + self-terminating: stops when no work remains or the grace window
-  // closes. No persistent timer, no listener — nothing to leak.
-  const audited = state.state === 'active' ? ((state as { fingerprint?: string }).fingerprint ?? null) : null;
-  const matched0 = state.state === 'active' && live0 !== null && live0 === audited;
+  // closes. No persistent timer, no listener — nothing to leak. A "match" here is
+  // the SUBSET verdict (every sealed tool present, extras tolerated), so a
+  // dynamic site that adds a tool still resolves to verified, not "changed".
+  const isVerified = (l: LiveCheck): boolean => l.host && (l.exact || l.sealedPresent);
+  const matched0 = state.state === 'active' && isVerified(live0);
   if (!registered.done || (state.state === 'active' && !matched0)) {
     const started = Date.now();
     const WINDOW_MS = 6000;
@@ -214,15 +215,44 @@ async function run(): Promise<void> {
       const graceExpired = Date.now() - started >= WINDOW_MS;
       let matched = false;
       if (state.state === 'active') {
-        const live = host ? await readLive(host) : null;
-        paint(displayWithGrace(state, live, graceExpired));
-        matched = host !== null && live !== null && live === audited;
+        const live: LiveCheck = host ? await readLiveCheck(host, state) : { host: false };
+        paint(displayWithGraceLive(state, live, graceExpired));
+        matched = isVerified(live);
       }
       const workLeft = !registered.done || (state.state === 'active' && !matched);
       if (graceExpired || !workLeft) return; // done
       setTimeout(() => void tick(), STEP_MS);
     };
     setTimeout(() => void tick(), STEP_MS);
+  }
+}
+
+/**
+ * Read the page's live tools and compare to the SEALED surface. Returns a
+ * subset-aware LiveCheck: `exact` (whole surface hashes to the seal) and
+ * `sealedPresent` (every sealed per-tool hash still present — audited tools
+ * intact, `extras` = count of added-since-audit tools). Falls back to exact
+ * aggregate match for a pre-0007 seal with no per-tool hashes. A read failure
+ * resolves to `{host:false}` (show the signed state, not an alarm).
+ */
+async function readLiveCheck(
+  host: { getTools(): Promise<RegisteredTool[]> },
+  state: BadgeStateJson,
+): Promise<LiveCheck> {
+  try {
+    const tools = await host.getTools();
+    const sealedFp = (state as { fingerprint?: string }).fingerprint;
+    const exact = (await fingerprintSurface(tools)) === sealedFp;
+    const sealed = (state as { toolFingerprints?: string[] | null }).toolFingerprints;
+    if (!sealed || sealed.length === 0) return { host: true, exact, sealedPresent: exact, extras: 0 };
+    const liveHashes = await toolFingerprints(tools);
+    const liveSet = new Set(liveHashes);
+    const sealedSet = new Set(sealed);
+    const sealedPresent = sealed.every((h) => liveSet.has(h));
+    const extras = liveHashes.reduce((n, h) => (sealedSet.has(h) ? n : n + 1), 0);
+    return { host: true, exact, sealedPresent, extras };
+  } catch {
+    return { host: false };
   }
 }
 
@@ -263,23 +293,18 @@ function registerVerifyTool(
     },
   };
   const execute = async (): Promise<string> => {
-    // Recompute against the tools present RIGHT NOW — the honest current verdict.
+    // Recompute against the tools present RIGHT NOW — the honest current verdict,
+    // subset-aware (audited tools intact, extras tolerated).
     const h = nativeHost();
-    let live: string | null = null;
-    if (h) {
-      try {
-        live = await fingerprintSurface(await h.getTools());
-      } catch {
-        live = null;
-      }
-    }
-    const d = decideBadge(state, live);
+    const live: LiveCheck = h ? await readLiveCheck(h, state) : { host: false };
+    const d = decideBadgeLive(state, live);
     return JSON.stringify(
       {
         ...staticInfo,
         verdict: d.label,
         detail: d.sub,
-        live_tools_match_audit: live === null ? null : live === s.fingerprint,
+        audited_tools_intact: live.host ? live.exact || live.sealedPresent : null,
+        tools_added_since_audit: live.host ? live.extras : null,
       },
       null,
       2,

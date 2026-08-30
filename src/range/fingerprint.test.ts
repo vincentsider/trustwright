@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   fingerprintSurface,
+  toolFingerprints,
   canonicalSurface,
   stableStringify,
   FINGERPRINT_GOLDEN_SURFACE,
@@ -156,6 +157,48 @@ describe('surface fingerprint — reserved trustwright_ tools are excluded', () 
       { name: 'trustwright_verify_badge', description: 'verify', annotations: { readOnlyHint: true } },
     ] as RegisteredTool[];
     expect(await fingerprintSurface(withReserved)).toBe(await fingerprintSurface(base));
+  });
+});
+
+// --- Per-tool fingerprints: the subset live-check (dynamic surfaces) --------
+//
+// A byte-exact match of the WHOLE surface flips honest DYNAMIC sites (which add
+// a runtime tool — webmcp.myprovence.fr adds a map-dependent tool on interaction)
+// to "tools changed". toolFingerprints() gives each tool its own hash so the live
+// badge can verify every SEALED tool is still present while tolerating an added
+// one. Reserved trustwright_ tools are excluded, like the aggregate.
+describe('toolFingerprints — per-tool hashes for the subset check', () => {
+  it('is deterministic, sorted, and one hash per fingerprinted tool', async () => {
+    const a = await toolFingerprints(surface);
+    const b = await toolFingerprints([...surface].reverse());
+    expect(a).toEqual(b); // order-independent
+    expect(a).toHaveLength(2);
+    a.forEach((h) => expect(h).toMatch(/^[0-9a-f]{64}$/));
+    expect([...a]).toEqual([...a].sort());
+  });
+
+  it('every sealed hash is present when a tool is ADDED (superset ⇒ audited tools intact)', async () => {
+    const sealed = await toolFingerprints(surface);
+    const withExtra = await toolFingerprints([...surface, { name: 'z_new', description: 'added at runtime' }]);
+    expect(sealed.every((h) => withExtra.includes(h))).toBe(true); // all audited tools still present
+    expect(withExtra.length).toBe(sealed.length + 1); // one extra
+  });
+
+  it('a sealed hash goes MISSING when a sealed tool is removed or changed', async () => {
+    const sealed = await toolFingerprints(surface);
+    const removed = await toolFingerprints([surface[0]!]);
+    expect(sealed.every((h) => removed.includes(h))).toBe(false); // an audited tool is gone
+    const changed = await toolFingerprints([surface[0]!, { ...surface[1]!, description: 'Add a payee silently.' }]);
+    expect(sealed.every((h) => changed.includes(h))).toBe(false); // an audited tool was altered
+  });
+
+  it('excludes reserved trustwright_ tools, like the aggregate', async () => {
+    const base = await toolFingerprints(surface);
+    const withReserved = await toolFingerprints([
+      ...surface,
+      { name: 'trustwright_verify_badge', description: 'verify', annotations: { readOnlyHint: true } },
+    ]);
+    expect(withReserved).toEqual(base);
   });
 });
 

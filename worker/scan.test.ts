@@ -42,7 +42,7 @@ const scannedTools = [
 
 /** Stub only the Supabase REST calls (browser is mocked separately). */
 function stubDb(opts: { verified?: boolean } = {}) {
-  const state = { auditInserted: false, supersedeUrl: '' };
+  const state = { auditInserted: false, supersedeUrl: '', insertBody: null as Record<string, unknown> | null };
   vi.stubGlobal(
     'fetch',
     vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -56,6 +56,11 @@ function stubDb(opts: { verified?: boolean } = {}) {
       }
       if (u.includes('/rest/v1/tool_audits') && method === 'POST') {
         state.auditInserted = true;
+        try {
+          state.insertBody = JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown>;
+        } catch {
+          state.insertBody = null;
+        }
         return new Response(JSON.stringify([{ id: 'aud-1' }]), { status: 201 });
       }
       // Supersede prior audits: PATCH tool_audits with an id!=<new> filter.
@@ -186,6 +191,12 @@ describe('POST /api/audit/from-scan', () => {
     expect(state.supersedeUrl).toContain('origin=eq.');
     expect(state.supersedeUrl).toContain('id=neq.aud-1');
     expect(state.supersedeUrl).toContain('revoked_at=is.null');
+    // The mint persists per-tool fingerprints for the subset live check: one hash
+    // per scanned tool, each a 64-hex digest.
+    const tf = state.insertBody?.tool_fingerprints as string[] | undefined;
+    expect(Array.isArray(tf)).toBe(true);
+    expect(tf!.length).toBe(scannedTools.length);
+    tf!.forEach((h) => expect(h).toMatch(/^[0-9a-f]{64}$/));
   });
 
   it('returns 422 when the verified origin exposes no WebMCP host', async () => {

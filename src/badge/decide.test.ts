@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { decideBadge, displayWithGrace } from './decide.ts';
+import { decideBadge, decideBadgeLive, displayWithGrace, displayWithGraceLive, type LiveCheck } from './decide.ts';
 
 const active = (fp: string) => ({ state: 'active' as const, fingerprint: fp, assuranceScore: 0.9, signedAt: '2026-08-28T00:00:00Z' });
 
@@ -61,6 +61,62 @@ describe('decideBadge (honesty rules)', () => {
   it('unverified / none -> neutral, never ok', () => {
     expect(decideBadge({ state: 'unverified' }, null).tone).toBe('neutral');
     expect(decideBadge({ state: 'none' }, null).tone).toBe('neutral');
+  });
+});
+
+describe('decideBadgeLive (subset check — dynamic surfaces)', () => {
+  const on = (o: Partial<LiveCheck & { exact: boolean; sealedPresent: boolean; extras: number }>): LiveCheck =>
+    ({ host: true, exact: false, sealedPresent: false, extras: 0, ...o }) as LiveCheck;
+
+  it('exact whole-surface match -> tools verified', () => {
+    const d = decideBadgeLive(active('abc'), on({ exact: true, sealedPresent: true }));
+    expect(d.label).toBe('tools verified');
+    expect(d.tone).toBe('ok');
+    expect(d.sub).toContain('match');
+  });
+
+  it('audited tools all present + EXTRA tools added -> still verified, discloses the extras', () => {
+    const d = decideBadgeLive(active('abc'), on({ exact: false, sealedPresent: true, extras: 2 }));
+    expect(d.label).toBe('tools verified');
+    expect(d.tone).toBe('ok');
+    expect(d.sub).toContain('audited tools intact');
+    expect(d.sub).toContain('2 tools added since audit');
+  });
+
+  it('one added tool -> singular wording', () => {
+    const d = decideBadgeLive(active('abc'), on({ sealedPresent: true, extras: 1 }));
+    expect(d.sub).toContain('1 tool added since audit');
+    expect(d.sub).not.toContain('1 tools');
+  });
+
+  it('an audited tool MISSING/changed -> tools changed (warn, never green)', () => {
+    const d = decideBadgeLive(active('abc'), on({ exact: false, sealedPresent: false, extras: 0 }));
+    expect(d.label).toBe('tools changed');
+    expect(d.tone).toBe('warn');
+    expect(d.sub).toContain('does not apply');
+  });
+
+  it('no host -> the signed "tools audited", never an alarm', () => {
+    const d = decideBadgeLive(active('abc'), { host: false });
+    expect(d.label).toBe('tools audited');
+    expect(d.tone).toBe('ok');
+  });
+
+  it('flagged wins even when the subset is intact (never green over a confirmed FAIL)', () => {
+    const d = decideBadgeLive({ ...active('abc'), flagged: true }, on({ sealedPresent: true, extras: 3 }));
+    expect(d.label).toBe('tools flagged');
+    expect(d.tone).toBe('warn');
+  });
+
+  it('flagged + a missing audited tool -> integrity wins: tools changed', () => {
+    const d = decideBadgeLive({ ...active('abc'), flagged: true }, on({ sealedPresent: false }));
+    expect(d.label).toBe('tools changed');
+  });
+
+  it('displayWithGraceLive suppresses "tools changed" during the grace window', () => {
+    const missing = on({ sealedPresent: false });
+    expect(displayWithGraceLive(active('abc'), missing, false).label).toBe('tools audited');
+    expect(displayWithGraceLive(active('abc'), missing, true).label).toBe('tools changed');
   });
 });
 

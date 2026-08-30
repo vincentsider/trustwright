@@ -20,6 +20,10 @@ export type BadgeStateJson =
   | {
       state: 'active';
       fingerprint: string;
+      /** Per-tool fingerprints of the sealed surface. Enables the subset live
+       *  check (each audited tool present, extras tolerated). Absent/null on
+       *  pre-0007 audits → the badge falls back to exact aggregate match. */
+      toolFingerprints?: string[] | null;
       assuranceScore: number | null;
       /** The signed audit recorded a confirmed FAIL. Absent on older responses. */
       flagged?: boolean;
@@ -56,6 +60,49 @@ export function displayWithGrace(
   const d = decideBadge(state, liveFingerprint);
   if (!graceExpired && d.label === 'tools changed') return decideBadge(state, null);
   return d;
+}
+
+/** Grace-window wrapper for the subset-aware verdict (see displayWithGrace). */
+export function displayWithGraceLive(state: BadgeStateJson, live: LiveCheck, graceExpired: boolean): BadgeDisplay {
+  const d = decideBadgeLive(state, live);
+  if (!graceExpired && d.label === 'tools changed') return decideBadge(state, null);
+  return d;
+}
+
+/**
+ * The result of reading the page's LIVE tools, for the subset-aware check.
+ *   - host:false                → no WebMCP host to read (show the signed state)
+ *   - exact                     → the whole live surface hashes to the seal
+ *   - sealedPresent             → every SEALED per-tool hash is still present
+ *                                 (each audited tool intact; extras are the count
+ *                                 of live tools NOT in the sealed set)
+ */
+export type LiveCheck =
+  | { host: false }
+  | { host: true; exact: boolean; sealedPresent: boolean; extras: number };
+
+/**
+ * Subset-aware live verdict. A byte-exact match of the WHOLE surface flips
+ * legitimately DYNAMIC sites to "tools changed" the moment they register an
+ * extra runtime tool (found in the field: webmcp.myprovence.fr adds a
+ * map-dependent tool once you interact). Instead we require every SEALED tool to
+ * still be present and unchanged, and treat an ADDED tool as un-audited, not as
+ * tampering. Integrity still comes first: if a sealed tool was removed or
+ * swapped, the seal does not apply. Falls back to `decideBadge` for the
+ * non-active, no-host, exact, and flagged cases so their wording stays identical.
+ */
+export function decideBadgeLive(state: BadgeStateJson, live: LiveCheck): BadgeDisplay {
+  if (state.state !== 'active' || !live.host) return decideBadge(state, null);
+  if (live.exact) return decideBadge(state, state.fingerprint); // fast path (verified / flagged)
+  if (!live.sealedPresent) {
+    // An audited tool is gone or altered — same integrity failure as a mismatch.
+    return { label: 'tools changed', tone: 'warn', sub: 'an audited tool has changed; this seal does not apply' };
+  }
+  // Every audited tool is intact; the live surface is a superset (extras added).
+  if (state.flagged) return decideBadge(state, state.fingerprint); // flagged wins, never green
+  const score = state.assuranceScore == null ? '' : ` · ${Math.round(state.assuranceScore * 100)}% clean`;
+  const added = live.extras > 0 ? ` · ${live.extras} tool${live.extras === 1 ? '' : 's'} added since audit` : '';
+  return { label: 'tools verified', tone: 'ok', sub: `audited tools intact${added}${score}` };
 }
 
 export function decideBadge(state: BadgeStateJson, liveFingerprint: string | null): BadgeDisplay {
