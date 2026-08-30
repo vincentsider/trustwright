@@ -24,7 +24,7 @@ import type { Env } from './types.ts';
 import { jsonPublic } from './http.ts';
 import { checkRate, underDailyCap, clientIp } from './limits.ts';
 import { validateTools } from './badge.ts';
-import { getOrigin, insertAudit } from './audits.ts';
+import { getOrigin, insertAudit, supersedePriorAudits } from './audits.ts';
 import { signEd25519, keyId, isSigningConfigured } from './crypto.ts';
 import { scanWithBrowser } from './browserScan.ts';
 import { isBlockedHostname } from './netguard.ts';
@@ -150,8 +150,9 @@ async function mintScannedAudit(req: Request, env: Env, target: { url: string; o
   const sealed = await sealSurfaceReport(report);
   const signature = await signEd25519(env, sealed.canonical);
 
+  let inserted: { id: string };
   try {
-    await insertAudit(env, {
+    inserted = await insertAudit(env, {
       origin: target.origin,
       fingerprint,
       findings: report.findings,
@@ -164,6 +165,14 @@ async function mintScannedAudit(req: Request, env: Env, target: { url: string; o
     });
   } catch {
     return jsonPublic({ error: 'persist_failed' }, { status: 502, req });
+  }
+  // Exactly one active audit per origin: revoke the ones this mint replaced.
+  // Best-effort AFTER the insert, so a failure here never leaves the origin
+  // without a live badge (the new active row already exists).
+  try {
+    await supersedePriorAudits(env, target.origin, inserted.id);
+  } catch {
+    /* stale rows are harmless — getLatestAudit still returns the new one */
   }
 
   return jsonPublic(

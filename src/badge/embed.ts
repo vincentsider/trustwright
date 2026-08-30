@@ -192,25 +192,34 @@ async function run(): Promise<void> {
   const registered = { done: false };
   if (host0) registered.done = registerVerifyTool(host0, origin, apiBase, state);
 
-  // Reconcile against the live tools. A site's WebMCP host (and its tools) often
-  // arrive asynchronously; without this the badge would sit on the weaker "tools
-  // audited" and the verify tool would never register (found on deepblocker.ai,
-  // whose tools install a tick after badge.js runs). Poll briefly: register the
-  // verify tool as soon as a host appears, and upgrade the verdict to the live
-  // "tools verified" once the on-page tools match the audit. Bounded, self-
-  // terminating (no leak): stops on a confirmed match or when the window closes.
-  if (state.state === 'active') {
-    const audited = (state as { fingerprint?: string }).fingerprint ?? null;
+  // Reconcile against the live host, which (with its tools) often arrives a tick
+  // after badge.js runs. Two jobs, either of which may still be pending:
+  //   (a) register trustwright_verify_badge as soon as ANY host appears — for
+  //       EVERY badge state, so even a revoked/expired/unverified badge stays
+  //       agent-checkable (not just the active case);
+  //   (b) for an active badge, upgrade the verdict to the live "tools verified"
+  //       once the on-page tools match the audit (else it sits on the weaker
+  //       "tools audited" — the race first seen on deepblocker.ai).
+  // Bounded + self-terminating: stops when no work remains or the grace window
+  // closes. No persistent timer, no listener — nothing to leak.
+  const audited = state.state === 'active' ? ((state as { fingerprint?: string }).fingerprint ?? null) : null;
+  const matched0 = state.state === 'active' && live0 !== null && live0 === audited;
+  if (!registered.done || (state.state === 'active' && !matched0)) {
     const started = Date.now();
     const WINDOW_MS = 6000;
     const STEP_MS = 250;
     const tick = async (): Promise<void> => {
       const host = nativeHost();
-      const live = host ? await readLive(host) : null;
       if (host && !registered.done) registered.done = registerVerifyTool(host, origin, apiBase, state);
       const graceExpired = Date.now() - started >= WINDOW_MS;
-      paint(displayWithGrace(state, live, graceExpired));
-      if ((host && live !== null && live === audited) || graceExpired) return; // done
+      let matched = false;
+      if (state.state === 'active') {
+        const live = host ? await readLive(host) : null;
+        paint(displayWithGrace(state, live, graceExpired));
+        matched = host !== null && live !== null && live === audited;
+      }
+      const workLeft = !registered.done || (state.state === 'active' && !matched);
+      if (graceExpired || !workLeft) return; // done
       setTimeout(() => void tick(), STEP_MS);
     };
     setTimeout(() => void tick(), STEP_MS);

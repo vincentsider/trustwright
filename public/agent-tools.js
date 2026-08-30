@@ -63,10 +63,15 @@
             return j({
               origin: o,
               status: b.state,
-              verdict: b.state === 'active' ? (b.flagged ? 'tools flagged' : 'tools verified') : b.state,
+              // Honest: this is a REMOTE check of the signed state — we cannot read
+              // that origin's live tools from here, so an active badge reads
+              // "tools audited", never a live "tools verified". The live match is
+              // done on the site itself (its badge / trustwright_verify_badge).
+              verdict: b.state === 'active' ? (b.flagged ? 'tools flagged' : 'tools audited') : b.state,
               assurance_score: typeof b.assuranceScore === 'number' ? b.assuranceScore : null,
               audited_tool_fingerprint: b.fingerprint || null,
               signed_at: b.signedAt || null,
+              note: 'Signed state as recorded by Trustwright. To confirm the site has not changed its tools since, load its page and call trustwright_verify_badge, or check the fingerprint against the live tools.',
               verify_public_key: API + '/api/pubkey',
             });
           })

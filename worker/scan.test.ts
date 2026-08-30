@@ -42,7 +42,7 @@ const scannedTools = [
 
 /** Stub only the Supabase REST calls (browser is mocked separately). */
 function stubDb(opts: { verified?: boolean } = {}) {
-  const state = { auditInserted: false };
+  const state = { auditInserted: false, supersedeUrl: '' };
   vi.stubGlobal(
     'fetch',
     vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -57,6 +57,11 @@ function stubDb(opts: { verified?: boolean } = {}) {
       if (u.includes('/rest/v1/tool_audits') && method === 'POST') {
         state.auditInserted = true;
         return new Response(JSON.stringify([{ id: 'aud-1' }]), { status: 201 });
+      }
+      // Supersede prior audits: PATCH tool_audits with an id!=<new> filter.
+      if (u.includes('/rest/v1/tool_audits') && method === 'PATCH') {
+        state.supersedeUrl = u;
+        return new Response(null, { status: 204 });
       }
       throw new Error(`unexpected fetch: ${method} ${u}`);
     }),
@@ -176,6 +181,11 @@ describe('POST /api/audit/from-scan', () => {
     expect(body.signature).toBeTypeOf('string');
     expect(body.sha256).toMatch(/^[0-9a-f]{64}$/);
     expect(state.auditInserted).toBe(true);
+    // Prior audits for the origin are superseded: PATCH revokes every row but
+    // the one just inserted (id != aud-1), and only ones not already revoked.
+    expect(state.supersedeUrl).toContain('origin=eq.');
+    expect(state.supersedeUrl).toContain('id=neq.aud-1');
+    expect(state.supersedeUrl).toContain('revoked_at=is.null');
   });
 
   it('returns 422 when the verified origin exposes no WebMCP host', async () => {

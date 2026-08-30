@@ -204,6 +204,24 @@ export async function insertCorpusEntitlement(
   if (!resp.ok) throw new Error(`corpus_entitlements insert failed: ${resp.status}`);
 }
 
+/**
+ * Supersede prior audits when a fresh one is minted: revoke every OTHER
+ * non-revoked audit for the origin, leaving exactly one active row (the new
+ * one). Best-effort and failure-safe by construction — the caller inserts the
+ * new active audit FIRST, so if this revoke fails the origin still has a valid
+ * live badge (plus some stale rows), never none. The badge reader
+ * (getLatestAudit, order signed_at desc) already ignores the stale rows; this
+ * just keeps the table honest (one active audit per origin).
+ */
+export async function supersedePriorAudits(env: Env, origin: string, keepId: string): Promise<void> {
+  const filter = `origin=eq.${encodeURIComponent(origin)}&id=neq.${encodeURIComponent(keepId)}&revoked_at=is.null`;
+  await fetch(sbUrl(env, `tool_audits?${filter}`), {
+    method: 'PATCH',
+    headers: sbHeaders(env, { Prefer: 'return=minimal' }),
+    body: JSON.stringify({ revoked_at: new Date().toISOString() }),
+  });
+}
+
 /** Revoke every audit for an origin (or one id). Returns rows affected count is not tracked. */
 export async function revokeAudits(env: Env, opts: { origin?: string; id?: string }): Promise<void> {
   const filter = opts.id
