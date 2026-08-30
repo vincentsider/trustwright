@@ -5,7 +5,7 @@
 // no ownership needed, because it makes no claim on the site's behalf.
 
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { scanUrl, type ScanResult } from '../../data/api.ts';
 import { FindingsList } from '../FindingsList.tsx';
 
@@ -24,7 +24,8 @@ const ERR: Record<string, string> = {
 };
 
 export function ScanPage() {
-  const [url, setUrl] = useState('');
+  const [params] = useSearchParams();
+  const [url, setUrl] = useState(params.get('url') ?? '');
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<ScanResult | null>(null);
   const [error, setError] = useState<string | null>(null);

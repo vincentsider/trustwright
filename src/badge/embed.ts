@@ -126,7 +126,9 @@ function render(
   const mount = document.createElement('span');
   target.parent.insertBefore(mount, target.before);
   const shadow = mount.attachShadow({ mode: 'open' });
-  const href = `${apiBase}/api/badge?origin=${encodeURIComponent(origin)}`;
+  // Link to the human-readable audit report (what was checked + how to verify),
+  // NOT the raw JSON API — that is what builds trust when someone clicks a badge.
+  const href = `${apiBase}/report?origin=${encodeURIComponent(origin)}`;
   const styleEl = document.createElement('style');
   const a = document.createElement('a');
   a.className = 'tw';
@@ -287,7 +289,8 @@ function registerVerifyTool(
       'Trustwright independently read the WebMCP tools this site exposes to AI agents, tested them for known tool-surface attacks (hidden instructions, false read-only, cross-origin relay, and more), and signed the result with Ed25519. The badge re-checks the live tools on every load and is revocable if they change.',
     verify: {
       live_state: `${apiBase}/api/badge?origin=${encodeURIComponent(origin)}`,
-      public_report: `${apiBase}/scan?url=${encodeURIComponent(origin)}`,
+      public_report: `${apiBase}/report?origin=${encodeURIComponent(origin)}`,
+      report_json: `${apiBase}/api/report?origin=${encodeURIComponent(origin)}`,
       issuer_public_key: `${apiBase}/api/pubkey`,
       signature_algorithm: 'Ed25519',
     },

@@ -21,8 +21,8 @@ import {
 import { newChallengeToken, normalizeOrigin, checkOriginControl } from './originVerify.ts';
 import { signEd25519, keyId, isSigningConfigured } from './crypto.ts';
 import { analyzeSurface } from '../src/range/mode2.ts';
-import { fingerprintSurface, stableStringify } from '../src/range/fingerprint.ts';
-import { buildSurfaceReport, sealSurfaceReport } from '../src/range/surfaceReport.ts';
+import { fingerprintSurface, stableStringify, FINGERPRINT_ALGO } from '../src/range/fingerprint.ts';
+import { buildSurfaceReport, sealSurfaceReport, scopeStatement } from '../src/range/surfaceReport.ts';
 
 const FINGERPRINT_RE = /^[0-9a-f]{64}$/;
 
@@ -261,6 +261,52 @@ export async function handleBadge(req: Request, env: Env): Promise<Response> {
   if (!origin) return jsonPublic({ error: 'invalid origin' }, { status: 400, req });
   try {
     return jsonPublic(await computeBadgeState(env, origin), { req });
+  } catch {
+    return jsonPublic({ error: 'lookup_failed' }, { status: 502, req });
+  }
+}
+
+/**
+ * GET /api/report?origin= -> the FULL, human-readable audit behind the badge:
+ * verdict, what was audited (scope), the findings, the assurance score, the
+ * signed fingerprint + per-tool count, and everything needed to verify the seal
+ * independently (Ed25519 signature, key id, report SHA-256, public key). This is
+ * what the badge links to so anyone — on any badged site — can see exactly what
+ * Trustwright checked and why to trust it. Read-only, public, no ownership needed.
+ */
+export async function handleReport(req: Request, env: Env): Promise<Response> {
+  const origin = normalizeOrigin(new URL(req.url).searchParams.get('origin'));
+  if (!origin) return jsonPublic({ error: 'invalid origin' }, { status: 400, req });
+  try {
+    const o = await getOrigin(env, origin);
+    if (!o || !o.verified_at) return jsonPublic({ origin, state: 'unverified' as const }, { req });
+    const a = await getLatestAudit(env, origin);
+    if (!a) return jsonPublic({ origin, state: 'none' as const }, { req });
+    const state = a.revoked_at
+      ? 'revoked'
+      : a.expires_at && new Date(a.expires_at).getTime() < Date.now()
+        ? 'expired'
+        : 'active';
+    return jsonPublic(
+      {
+        origin,
+        state,
+        fingerprint: a.fingerprint,
+        toolCount: Array.isArray(a.tool_fingerprints) ? a.tool_fingerprints.length : null,
+        assuranceScore: a.assurance_score,
+        assuranceRung: a.assurance_rung,
+        flagged: hasFailFinding(a.findings),
+        findings: Array.isArray(a.findings) ? a.findings : [],
+        scope: scopeStatement(a.signed_at, a.fingerprint),
+        signedAt: a.signed_at,
+        expiresAt: a.expires_at,
+        reportSha256: a.report_sha256,
+        signature: a.signature,
+        keyId: a.key_id,
+        fingerprintAlgo: FINGERPRINT_ALGO,
+      },
+      { req },
+    );
   } catch {
     return jsonPublic({ error: 'lookup_failed' }, { status: 502, req });
   }

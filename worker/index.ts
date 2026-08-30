@@ -21,6 +21,7 @@ import {
   handleAudit,
   handleRevoke,
   handleBadge,
+  handleReport,
   handlePubkey,
   handleManifest,
   handleGetManifest,
@@ -198,6 +199,7 @@ export default {
       if (url.pathname === '/api/audit/self' && req.method === 'POST') return handleAuditSelf(req, env);
       if (url.pathname === '/api/scan' && req.method === 'POST') return handleScan(req, env);
       if (url.pathname === '/api/badge' && req.method === 'GET') return handleBadge(req, env);
+      if (url.pathname === '/api/report' && req.method === 'GET') return handleReport(req, env);
       if (url.pathname === '/api/pubkey' && req.method === 'GET') return handlePubkey(req, env);
       if (url.pathname === '/api/manifest' && req.method === 'POST') return handleManifest(req, env);
       if (url.pathname === '/api/manifest' && req.method === 'GET') return handleGetManifest(req, env);

@@ -12,6 +12,7 @@ import { RangePage } from './pages/RangePage.tsx';
 import { AuditWizard } from './pages/AuditWizard.tsx';
 import { ScanPage } from './pages/ScanPage.tsx';
 import { BadgePage } from './pages/BadgePage.tsx';
+import { ReportPage } from './pages/ReportPage.tsx';
 
 export const routes: RouteObject[] = [
   {
@@ -23,6 +24,7 @@ export const routes: RouteObject[] = [
       { path: 'badge', element: <AuditWizard /> },
       { path: 'embed', element: <BadgePage /> },
       { path: 'scan', element: <ScanPage /> },
+      { path: 'report', element: <ReportPage /> },
       { path: '*', element: <Home /> },
     ],
   },

@@ -255,6 +255,36 @@ export async function checkBadge(origin: string): Promise<BadgeState | null> {
   }
 }
 
+export interface BadgeReport {
+  origin: string;
+  state: 'active' | 'revoked' | 'expired' | 'unverified' | 'none';
+  fingerprint?: string;
+  toolCount?: number | null;
+  assuranceScore?: number | null;
+  assuranceRung?: number;
+  flagged?: boolean;
+  findings?: ScanFinding[];
+  scope?: string;
+  signedAt?: string;
+  expiresAt?: string | null;
+  reportSha256?: string;
+  signature?: string;
+  keyId?: string;
+  fingerprintAlgo?: string;
+  error?: string;
+}
+
+/** The full, human-readable audit behind a badge (what the badge links to). */
+export async function getReport(origin: string): Promise<BadgeReport | null> {
+  try {
+    const resp = await fetch(mode2Url(`/api/report?origin=${encodeURIComponent(origin)}`));
+    if (!resp.ok) return null;
+    return (await resp.json()) as BadgeReport;
+  } catch {
+    return null;
+  }
+}
+
 export interface LeadResult {
   ok: boolean;
   /** True only if a report email was actually sent (Resend configured). */
