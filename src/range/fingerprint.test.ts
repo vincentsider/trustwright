@@ -142,6 +142,23 @@ describe('surface fingerprint — host decoration is invisible', () => {
   });
 });
 
+// --- Reserved trustwright_ tools are excluded from the fingerprint ---------
+//
+// badge.js registers a `trustwright_verify_badge` tool on every badged site so
+// agents can verify the badge over WebMCP. That tool must NOT change the site's
+// fingerprint (or an honest badge would flip to "tools changed"), so the whole
+// `trustwright_` namespace is dropped before hashing.
+describe('surface fingerprint — reserved trustwright_ tools are excluded', () => {
+  it('adding a trustwright_ tool leaves the fingerprint unchanged', async () => {
+    const base = [{ name: 'a', description: 'x', annotations: { readOnlyHint: true } }] as RegisteredTool[];
+    const withReserved = [
+      ...base,
+      { name: 'trustwright_verify_badge', description: 'verify', annotations: { readOnlyHint: true } },
+    ] as RegisteredTool[];
+    expect(await fingerprintSurface(withReserved)).toBe(await fingerprintSurface(base));
+  });
+});
+
 // --- Shared references (DAG, not a cycle) are structural, not identity -----
 //
 // The circular guard is PATH-SCOPED: it breaks only an object that is its own
@@ -217,7 +234,7 @@ describe('surface fingerprint — mint (normalized) equals live (raw)', () => {
 // build can never silently ship a fingerprint the other side won't match.
 // If you change canonicalisation on purpose, update this value in the same
 // commit and rebuild/redeploy the worker AND badge.js together.
-describe('surface fingerprint — pinned golden vector (drift tripwire)', () => {
+describe('surface fingerprint — pinned golden vector (drift sentinel)', () => {
   // Reference surface + pin come from the module itself — the same constants
   // the worker's /api/fingerprint-selftest asserts against — so build-time and
   // run-time verify one source of truth.

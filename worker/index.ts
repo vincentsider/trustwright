@@ -164,7 +164,7 @@ export default {
         ctx.waitUntil(warmDetector(env));
         return json({ ok: true, service: 'trustwright' }, { req, env });
       }
-      // Fingerprint drift tripwire: the DEPLOYED worker recomputes the golden
+      // Fingerprint drift sentinel: the DEPLOYED worker recomputes the golden
       // surface and reports whether it still matches the pin. badge.js imports
       // the same module, so a mismatch here means the two bundles have drifted
       // (Bug 2). A monitor can poll this after every deploy.

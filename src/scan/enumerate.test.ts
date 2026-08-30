@@ -68,6 +68,55 @@ describe('enumerateInPage', () => {
     expect(r.host).toBe('native');
     expect(r.tools).toEqual(toolList);
   });
+
+  // --- Scanner-injected host (worker/browserScan.ts) --------------------------
+  // The scanner may inject a standard WebMCP host tagged __twInjected so a site
+  // that uses the native API but ships no polyfill is still enumerable. An
+  // injected host exists from t=0, so its emptiness is only meaningful at the
+  // deadline, and tools may register asynchronously into it.
+
+  it('reads tools registered into the injected host', async () => {
+    const host = { __twInjected: true, getTools: () => toolList };
+    setWindow({ document: { modelContext: host }, navigator: {} });
+    const r = await enumerateInPage(1000);
+    expect(r.host).toBe('native');
+    expect(r.tools).toEqual(toolList);
+  });
+
+  it('reports none when the injected host stays empty until the deadline', async () => {
+    // The page never used WebMCP: our injected host is present but got no tools.
+    const host = { __twInjected: true, getTools: () => [] as unknown[] };
+    setWindow({ document: { modelContext: host }, navigator: {} });
+    const r = await enumerateInPage(300);
+    expect(r).toEqual({ host: 'none', tools: [] });
+  });
+
+  it('waits for tools registered asynchronously into the injected host', async () => {
+    let current: unknown[] = [];
+    const host = { __twInjected: true, getTools: () => current };
+    setWindow({ document: { modelContext: host }, navigator: {} });
+    setTimeout(() => {
+      current = toolList;
+    }, 250);
+    const r = await enumerateInPage(2000);
+    expect(r.host).toBe('native');
+    expect(r.tools).toEqual(toolList);
+  });
+
+  it('settles a burst of async registrations into the injected host', async () => {
+    let current: unknown[] = [{ name: 'a', description: 'A' }];
+    const host = { __twInjected: true, getTools: () => current };
+    setWindow({ document: { modelContext: host }, navigator: {} });
+    // A second tool appears one interval later; the settle loop must catch it.
+    setTimeout(() => {
+      current = [
+        { name: 'a', description: 'A' },
+        { name: 'b', description: 'B' },
+      ];
+    }, 120);
+    const r = await enumerateInPage(2000);
+    expect(r.tools).toHaveLength(2);
+  });
 });
 
 describe('normalizeSurface', () => {

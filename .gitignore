@@ -20,3 +20,6 @@ dist/
 
 # Test / coverage
 coverage/
+
+# SSR prerender bundle (build artifact)
+dist-ssr/

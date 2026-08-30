@@ -307,8 +307,8 @@ export function Home() {
             DeepBlocker
           </a>
         </span>
-        <a href="https://github.com/vincentsider/tripwire" target="_blank" rel="noopener noreferrer">
-          github.com/vincentsider/tripwire
+        <a href="https://github.com/vincentsider/trustwright" target="_blank" rel="noopener noreferrer">
+          github.com/vincentsider/trustwright
         </a>
       </div>
     </div>

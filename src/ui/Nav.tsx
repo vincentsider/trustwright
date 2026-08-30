@@ -7,7 +7,7 @@
 import { NavLink, useLocation } from 'react-router-dom';
 import { Logo } from './Logo.tsx';
 
-const GITHUB = 'https://github.com/vincentsider/tripwire';
+const GITHUB = 'https://github.com/vincentsider/trustwright';
 
 export function Nav() {
   const light = useLocation().pathname === '/';

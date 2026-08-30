@@ -84,7 +84,7 @@ describe('isBlockedHostname — the sync SSRF gate', () => {
   ];
   for (const h of blocked) it(`blocks ${h || '(empty)'}`, () => expect(isBlockedHostname(h)).toBe(true));
 
-  const allowed = ['example.com', 'openclawcity.ai', 'tripwire.deepblocker.ai', 'sub.domain.co.uk', '8.8.8.8', '104.16.0.1'];
+  const allowed = ['example.com', 'openclawcity.ai', 'trustwright.deepblocker.ai', 'sub.domain.co.uk', '8.8.8.8', '104.16.0.1'];
   for (const h of allowed) it(`allows ${h}`, () => expect(isBlockedHostname(h)).toBe(false));
 
   it('is case-insensitive and tolerates a trailing dot', () => {

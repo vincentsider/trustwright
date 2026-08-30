@@ -21,7 +21,7 @@
 // the badge but can never make it claim more than the signed, live-checked state.
 
 import { fingerprintSurface } from '../range/fingerprint.ts';
-import { decideBadge, type BadgeStateJson, type Tone } from './decide.ts';
+import { decideBadge, displayWithGrace, type BadgeDisplay, type BadgeStateJson, type Tone } from './decide.ts';
 import type { RegisteredTool } from '../webmcp/types.ts';
 
 // Capture the script element synchronously — document.currentScript is null after
@@ -95,31 +95,32 @@ async function resolveMount(): Promise<{ parent: Node; before: Node | null }> {
   return { parent: scriptEl?.parentNode ?? document.body, before: scriptEl?.nextSibling ?? null };
 }
 
-function render(
-  target: { parent: Node; before: Node | null },
-  apiBase: string,
-  origin: string,
-  label: string,
-  tone: Tone,
-  sub: string,
-  opts: { theme: Theme; compact: boolean },
-): void {
-  const mount = document.createElement('span');
-  target.parent.insertBefore(mount, target.before);
-  const shadow = mount.attachShadow({ mode: 'open' });
-  const color = TONE_COLOR[tone];
-  const href = `${apiBase}/api/badge?origin=${encodeURIComponent(origin)}`;
-  // Only controlled strings (label/sub from decideBadge, color from a fixed map,
-  // href URL-encoded) reach the DOM; the raw origin is never injected as HTML.
-  const style =
-    themeVars(opts.theme) +
+/** A live badge with an in-place updater, so an async host can upgrade the verdict. */
+type BadgePainter = (d: BadgeDisplay) => void;
+
+function styleFor(theme: Theme, color: string): string {
+  return (
+    themeVars(theme) +
     '.tw{display:inline-flex;align-items:center;gap:8px;font:500 12px/1.2 ui-sans-serif,system-ui,sans-serif;' +
     'text-decoration:none;border:1px solid ' + color + '33;border-radius:8px;padding:6px 10px;' +
     'background:var(--tw-bg);color:var(--tw-fg)}' +
     '.dot{width:8px;height:8px;border-radius:50%;background:' + color + ';flex:none}' +
-    '.lab{color:' + color + ';font-weight:600}.sub{color:var(--tw-sub);font-weight:400}';
+    '.lab{color:' + color + ';font-weight:600}.sub{color:var(--tw-sub);font-weight:400}'
+  );
+}
+
+function render(
+  target: { parent: Node; before: Node | null },
+  apiBase: string,
+  origin: string,
+  initial: BadgeDisplay,
+  opts: { theme: Theme; compact: boolean },
+): BadgePainter {
+  const mount = document.createElement('span');
+  target.parent.insertBefore(mount, target.before);
+  const shadow = mount.attachShadow({ mode: 'open' });
+  const href = `${apiBase}/api/badge?origin=${encodeURIComponent(origin)}`;
   const styleEl = document.createElement('style');
-  styleEl.textContent = style;
   const a = document.createElement('a');
   a.className = 'tw';
   a.href = href;
@@ -129,15 +130,26 @@ function render(
   dot.className = 'dot';
   const lab = document.createElement('span');
   lab.className = 'lab';
-  lab.textContent = 'Trustwright: ' + label;
+  const sb = document.createElement('span');
+  sb.className = 'sub';
   a.append(dot, lab);
-  if (!opts.compact && sub) {
-    const sb = document.createElement('span');
-    sb.className = 'sub';
-    sb.textContent = sub;
-    a.append(sb);
-  }
   shadow.append(styleEl, a);
+
+  // Only controlled strings reach the DOM: label/sub come from decideBadge, the
+  // color from a fixed map, the href is URL-encoded. The raw origin is never
+  // injected as HTML. paint() can be called again to upgrade the verdict in place.
+  const paint: BadgePainter = (d) => {
+    styleEl.textContent = styleFor(opts.theme, TONE_COLOR[d.tone]);
+    lab.textContent = 'Trustwright: ' + d.label;
+    if (!opts.compact && d.sub) {
+      sb.textContent = d.sub;
+      if (!sb.isConnected) a.append(sb);
+    } else if (sb.isConnected) {
+      sb.remove();
+    }
+  };
+  paint(initial);
+  return paint;
 }
 
 async function run(): Promise<void> {
@@ -154,23 +166,129 @@ async function run(): Promise<void> {
     return;
   }
 
-  let liveFingerprint: string | null = null;
-  const host = nativeHost();
-  if (host) {
-    try {
-      liveFingerprint = await fingerprintSurface(await host.getTools());
-    } catch {
-      liveFingerprint = null;
-    }
-  }
-
   const themeAttr = scriptEl?.dataset.theme;
   const theme: Theme = themeAttr === 'dark' || themeAttr === 'auto' ? themeAttr : 'light';
   const compact = scriptEl?.dataset.variant === 'compact';
 
-  const d = decideBadge(state, liveFingerprint);
+  const readLive = async (host: { getTools(): Promise<RegisteredTool[]> }): Promise<string | null> => {
+    try {
+      return await fingerprintSurface(await host.getTools());
+    } catch {
+      return null;
+    }
+  };
+
+  const host0 = nativeHost();
+  const live0 = host0 ? await readLive(host0) : null;
+
   const target = await resolveMount();
-  render(target, apiBase, origin, d.label, d.tone, d.sub, { theme, compact });
+  const paint = render(target, apiBase, origin, displayWithGrace(state, live0, false), { theme, compact });
+
+  // Make the badge machine-verifiable on EVERY badged site: register a WebMCP
+  // tool an agent can call to get the signed verdict + how to check it. Named in
+  // the reserved `trustwright_` namespace, so it is excluded from the fingerprint
+  // and never affects the verdict. The tool recomputes the live verdict at CALL
+  // time, so it is always accurate regardless of when the agent asks.
+  const registered = { done: false };
+  if (host0) registered.done = registerVerifyTool(host0, origin, apiBase, state);
+
+  // Reconcile against the live tools. A site's WebMCP host (and its tools) often
+  // arrive asynchronously; without this the badge would sit on the weaker "tools
+  // audited" and the verify tool would never register (found on deepblocker.ai,
+  // whose tools install a tick after badge.js runs). Poll briefly: register the
+  // verify tool as soon as a host appears, and upgrade the verdict to the live
+  // "tools verified" once the on-page tools match the audit. Bounded, self-
+  // terminating (no leak): stops on a confirmed match or when the window closes.
+  if (state.state === 'active') {
+    const audited = (state as { fingerprint?: string }).fingerprint ?? null;
+    const started = Date.now();
+    const WINDOW_MS = 6000;
+    const STEP_MS = 250;
+    const tick = async (): Promise<void> => {
+      const host = nativeHost();
+      const live = host ? await readLive(host) : null;
+      if (host && !registered.done) registered.done = registerVerifyTool(host, origin, apiBase, state);
+      const graceExpired = Date.now() - started >= WINDOW_MS;
+      paint(displayWithGrace(state, live, graceExpired));
+      if ((host && live !== null && live === audited) || graceExpired) return; // done
+      setTimeout(() => void tick(), STEP_MS);
+    };
+    setTimeout(() => void tick(), STEP_MS);
+  }
+}
+
+type RegisterableHost = { registerTool?: (tool: unknown, options?: unknown) => unknown };
+
+/**
+ * Register `trustwright_verify_badge` on the page's WebMCP host. Its execute()
+ * recomputes the LIVE verdict at call time (re-reads the host's current tools
+ * and re-runs decideBadge), so an agent always gets the honest current answer —
+ * "tools verified", "tools changed", or "tools audited" — no matter when it
+ * asks. Returns true if the registration was accepted. Best-effort: a host with
+ * no usable registerTool just returns false and the visual badge still renders.
+ */
+function registerVerifyTool(
+  host: { getTools(): Promise<RegisteredTool[]> } | null,
+  origin: string,
+  apiBase: string,
+  state: BadgeStateJson,
+): boolean {
+  const reg = (host as RegisterableHost | null)?.registerTool;
+  if (typeof reg !== 'function') return false;
+  const s = state as { assuranceScore?: number | null; fingerprint?: string; signedAt?: string };
+  const staticInfo = {
+    badge: 'Trustwright — trust layer for the WebMCP agent web',
+    issuer: new URL(apiBase).host,
+    subject: origin,
+    status: state.state,
+    assurance_score: typeof s.assuranceScore === 'number' ? s.assuranceScore : null,
+    audited_tool_fingerprint: s.fingerprint ?? null,
+    signed_at: s.signedAt ?? null,
+    what_it_certifies:
+      'Trustwright independently read the WebMCP tools this site exposes to AI agents, tested them for known tool-surface attacks (hidden instructions, false read-only, cross-origin relay, and more), and signed the result with Ed25519. The badge re-checks the live tools on every load and is revocable if they change.',
+    verify: {
+      live_state: `${apiBase}/api/badge?origin=${encodeURIComponent(origin)}`,
+      public_report: `${apiBase}/scan?url=${encodeURIComponent(origin)}`,
+      issuer_public_key: `${apiBase}/api/pubkey`,
+      signature_algorithm: 'Ed25519',
+    },
+  };
+  const execute = async (): Promise<string> => {
+    // Recompute against the tools present RIGHT NOW — the honest current verdict.
+    const h = nativeHost();
+    let live: string | null = null;
+    if (h) {
+      try {
+        live = await fingerprintSurface(await h.getTools());
+      } catch {
+        live = null;
+      }
+    }
+    const d = decideBadge(state, live);
+    return JSON.stringify(
+      {
+        ...staticInfo,
+        verdict: d.label,
+        detail: d.sub,
+        live_tools_match_audit: live === null ? null : live === s.fingerprint,
+      },
+      null,
+      2,
+    );
+  };
+  try {
+    void reg.call(host, {
+      name: 'trustwright_verify_badge',
+      description:
+        "Return this site's Trustwright verification badge: what it certifies about the site's agent tools, the live verdict right now, and how to check it independently.",
+      inputSchema: { type: 'object', properties: {} },
+      annotations: { readOnlyHint: true },
+      execute,
+    });
+    return true;
+  } catch {
+    return false; // host rejected the registration — the badge still renders
+  }
 }
 
 // Parity self-test hook (Bug 2). ONLY when the embed is loaded with an explicit

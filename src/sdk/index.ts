@@ -17,7 +17,7 @@ import { analyzeSurface, type SurfaceAudit } from '../range/mode2.ts';
 import { fingerprintSurface } from '../range/fingerprint.ts';
 import type { RegisteredTool } from '../webmcp/types.ts';
 
-const DEFAULT_API = 'https://tripwire.deepblocker.ai';
+const DEFAULT_API = 'https://trustwright.deepblocker.ai';
 
 export interface SdkOptions {
   /** Trustwright API base. Defaults to the hosted Worker. */

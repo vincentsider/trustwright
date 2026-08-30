@@ -12,9 +12,60 @@
       name="description"
       content="The first trust layer for WebMCP. Trustwright audits the tools websites expose to AI agents, tests agents against real attacks, and seals honest sites with a signed, revocable badge."
     />
+    <link rel="canonical" href="https://trustwright.deepblocker.ai/" />
+
+    <!-- With JS off (many crawlers / answer engines), the scroll-reveal never
+         runs, so force the prerendered content fully visible instead of leaving
+         it at its pre-reveal opacity:0. JS-on visitors get the animation. -->
+    <noscript>
+      <style>
+        .lp [data-reveal] { opacity: 1 !important; transform: none !important; }
+      </style>
+    </noscript>
+
+    <!-- GEO / agent discovery: crawlers and answer engines that never run JS still
+         get a full, accurate description of what this site is and what it offers.
+         Kept in parity with the WebMCP tools in /agent-tools.js and /llms.txt. -->
+    <meta property="og:title" content="Trustwright — the trust layer for the WebMCP agent web" />
+    <meta
+      property="og:description"
+      content="Audit the tools a website exposes to AI agents, test an agent against real tool-surface attacks, and issue a signed, revocable verified badge."
+    />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://trustwright.deepblocker.ai/" />
+    <meta name="twitter:card" content="summary" />
+    <!-- Machine-readable pointer to this site's own WebMCP tool surface. -->
+    <meta name="webmcp" content="available" />
+    <meta name="webmcp-tools" content="trustwright_scan_site, trustwright_check_badge, trustwright_what_is_tested, trustwright_start_verification" />
+    <link rel="alternate" type="text/plain" href="/llms.txt" title="LLM-readable summary" />
+
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        "name": "Trustwright",
+        "applicationCategory": "SecurityApplication",
+        "operatingSystem": "Web",
+        "url": "https://trustwright.deepblocker.ai/",
+        "description": "Trustwright is the first trust layer for WebMCP. It audits the tools a website exposes to AI agents, tests agents against real tool-surface attacks (hidden instructions, contaminated output, tool hijacking, false read-only, cross-origin relay, deepfake assertion laundering), and issues a signed, revocable verified badge.",
+        "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+        "isAccessibleForFree": true,
+        "sameAs": ["https://github.com/vincentsider/trustwright"],
+        "publisher": { "@type": "Organization", "name": "DeepBlocker", "url": "https://deepblocker.ai" },
+        "potentialAction": {
+          "@type": "Action",
+          "name": "Scan a site's agent tools",
+          "target": "https://trustwright.deepblocker.ai/scan?url={url}"
+        }
+      }
+    </script>
   </head>
   <body>
     <div id="root"></div>
+    <!-- This site is itself agent-native: an AI agent that visits can DRIVE
+         Trustwright over WebMCP (scan, check a badge, start verification) instead
+         of scraping the page. Same-origin, so it satisfies the CSP. -->
+    <script src="/agent-tools.js"></script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

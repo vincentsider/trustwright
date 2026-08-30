@@ -36,11 +36,23 @@ export interface NormalTool {
  * Executed in the page context. Polls for a WebMCP host for up to `waitMs`,
  * then returns the raw tool list. Must be self-contained (no closure over
  * module scope) because it is serialized to a string for the browser.
+ *
+ * The scanner may INJECT a standard, spec-shaped WebMCP host before the page's
+ * scripts run (worker/browserScan.ts), so a site that uses the native
+ * `navigator.modelContext.registerTool` / `provideContext` API but ships no
+ * host of its own is still enumerable. That injected host carries a
+ * non-enumerable `__twInjected` marker. It exists from t=0, so — unlike a
+ * page-provided host — an EMPTY injected host is not proof of anything yet: the
+ * page may register tools asynchronously. We therefore treat the two cases
+ * differently:
+ *   - page-provided host  → report exactly what it has right now (unchanged).
+ *   - our injected host    → wait for tools to appear and settle; if none ever
+ *                            do, the page never used WebMCP → report 'none'.
  */
 export async function enumerateInPage(waitMs: number): Promise<RawScan> {
   const deadline = Date.now() + waitMs;
-  type Host = { getTools?: (o?: unknown) => unknown };
-  const find = (): { host: Host; kind: 'native' | 'polyfill' } | null => {
+  type Host = { getTools?: (o?: unknown) => unknown; __twInjected?: unknown };
+  const find = (): { host: Host; kind: 'native' | 'polyfill'; injected: boolean } | null => {
     const w = window as unknown as {
       __webmcpPolyfill?: unknown;
       navigator: { modelContext?: Host };
@@ -52,22 +64,47 @@ export async function enumerateInPage(waitMs: number): Promise<RawScan> {
     if (!host) return null;
     // Heuristic only; the Worker treats native and polyfill identically.
     const kind = w.__webmcpPolyfill ? 'polyfill' : 'native';
-    return { host, kind };
+    return { host, kind, injected: host.__twInjected === true };
   };
+  const readTools = async (host: Host): Promise<unknown[]> => {
+    try {
+      const t = await Promise.resolve(host.getTools!());
+      return Array.isArray(t) ? t : [];
+    } catch {
+      return [];
+    }
+  };
+  const sleep = () => new Promise((r) => setTimeout(r, 150));
 
   for (;;) {
     const f = find();
     if (f) {
-      let tools: unknown;
-      try {
-        tools = await Promise.resolve(f.host.getTools!());
-      } catch {
-        tools = [];
+      const tools = await readTools(f.host);
+      if (!f.injected) {
+        // A host the PAGE installed: report what it declares right now (the
+        // long-standing behaviour). An empty page-host is a real "host, no
+        // tools" result, not a missing surface.
+        return { host: f.kind, tools };
       }
-      return { host: f.kind, tools: Array.isArray(tools) ? tools : [] };
+      // Our injected host. Tools arrive asynchronously as the page's scripts run.
+      if (tools.length > 0) {
+        // Let a burst of registrations settle: return once the count is stable
+        // across one interval (or the deadline is reached).
+        let stable = tools;
+        while (Date.now() < deadline) {
+          await sleep();
+          const next = await readTools(f.host);
+          if (next.length === stable.length) break;
+          stable = next;
+        }
+        return { host: f.kind, tools: stable };
+      }
+      // Empty injected host at the deadline ⇒ the page never used WebMCP.
+      if (Date.now() >= deadline) return { host: 'none', tools: [] };
+    } else if (Date.now() >= deadline) {
+      return { host: 'none', tools: [] };
     }
-    if (Date.now() >= deadline) return { host: 'none', tools: [] };
-    await new Promise((r) => setTimeout(r, 150));
+    await sleep();
   }
 }
 

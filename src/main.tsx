@@ -10,35 +10,20 @@ import { createRoot } from 'react-dom/client';
 import { createBrowserRouter, RouterProvider } from 'react-router-dom';
 import { resolveHost } from './webmcp/shim.ts';
 import { installPolyfill } from './webmcp/polyfill.ts';
-import { App } from './ui/App.tsx';
-import { Home } from './ui/pages/Home.tsx';
-import { RangePage } from './ui/pages/RangePage.tsx';
-import { AuditWizard } from './ui/pages/AuditWizard.tsx';
-import { ScanPage } from './ui/pages/ScanPage.tsx';
-import { BadgePage } from './ui/pages/BadgePage.tsx';
+import { routes } from './ui/routes.tsx';
 import './ui/theme.css';
 import './ui/console.css';
 
 const native = resolveHost();
 if (native.source === 'none') installPolyfill();
 
-const router = createBrowserRouter([
-  {
-    path: '/',
-    element: <App />,
-    children: [
-      { index: true, element: <Home /> },
-      { path: 'range', element: <RangePage /> },
-      { path: 'badge', element: <AuditWizard /> },
-      { path: 'embed', element: <BadgePage /> },
-      { path: 'scan', element: <ScanPage /> },
-      { path: '*', element: <Home /> },
-    ],
-  },
-]);
+const router = createBrowserRouter(routes);
 
 const container = document.getElementById('root');
 if (!container) throw new Error('#root not found');
+// createRoot (not hydrateRoot): the build-time prerenderer injects plain static
+// markup into #root for crawlers/answer engines; createRoot cleanly replaces it
+// with the live app on mount. No hydration handshake, so no mismatch risk.
 createRoot(container).render(
   <React.StrictMode>
     <RouterProvider router={router} />

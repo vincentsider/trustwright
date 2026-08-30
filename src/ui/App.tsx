@@ -21,8 +21,8 @@ export function App() {
             <span>Open source · Apache-2.0 · engineered by{' '}
               <a href="https://deepblocker.ai" target="_blank" rel="noopener noreferrer">DeepBlocker</a>
             </span>
-            <a href="https://github.com/vincentsider/tripwire" target="_blank" rel="noopener noreferrer">
-              github.com/vincentsider/tripwire
+            <a href="https://github.com/vincentsider/trustwright" target="_blank" rel="noopener noreferrer">
+              github.com/vincentsider/trustwright
             </a>
           </div>
         </footer>

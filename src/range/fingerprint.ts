@@ -80,6 +80,14 @@ export const FP_MAX_SCHEMA_CHARS = 8000;
 export const FP_MAX_ANNOTATION_KEY = 64;
 export const FP_MAX_ANNOTATION_STR = 256;
 
+// Reserved namespace for Trustwright's OWN tools (e.g. the badge's verify tool
+// that badge.js registers on every badged site). These are EXCLUDED from the
+// fingerprint so that adding the verification tool never changes a site's hash
+// (which would flip an honest badge to "tools changed"). They are still ANALYSED
+// for findings — only the fingerprint ignores them — so a site cannot smuggle a
+// hostile tool past the audit by naming it `trustwright_…`.
+export const RESERVED_TOOL_PREFIX = 'trustwright_';
+
 function plainObject(v: unknown): Record<string, unknown> | undefined {
   return v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : undefined;
 }
@@ -108,6 +116,7 @@ export function canonicalizeTool(raw: unknown): FingerprintTool | null {
   if (!o) return null;
   const name = typeof o.name === 'string' ? o.name.slice(0, FP_MAX_NAME) : '';
   if (!name) return null;
+  if (name.startsWith(RESERVED_TOOL_PREFIX)) return null; // Trustwright's own tools never enter the hash
   const description = normalizeWhitespace(typeof o.description === 'string' ? o.description.slice(0, FP_MAX_DESC) : '');
   let inputSchema: unknown = null;
   const schema = plainObject(o.inputSchema);
@@ -167,7 +176,7 @@ export async function fingerprintSurface(tools: ReadonlyArray<unknown>): Promise
   return toHex(digest);
 }
 
-// --- Drift tripwire (Bug 2) -----------------------------------------------
+// --- Drift sentinel (Bug 2) -----------------------------------------------
 //
 // The worker (mint + scan) and the browser badge.js both import THIS module,
 // so they can only ever disagree if one was built/deployed from a stale tree.

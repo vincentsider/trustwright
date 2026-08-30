@@ -38,6 +38,26 @@ function day(iso?: string): string {
   return iso ? iso.slice(0, 10) : '';
 }
 
+/**
+ * The badge's live embed reads the page's tools to decide "verified" vs
+ * "changed", but a site commonly installs its WebMCP host and registers its
+ * tools ASYNCHRONOUSLY — so for a short grace window after load, an apparent
+ * mismatch is far more likely "not registered yet" than a real tool-swap.
+ * During that window we suppress the alarming "tools changed" and show the
+ * honest signed "tools audited" instead; once the window closes, a persistent
+ * mismatch is trusted as a genuine change. A confirmed live MATCH is always
+ * shown immediately (grace only ever downgrades an alarm, never a green seal).
+ */
+export function displayWithGrace(
+  state: BadgeStateJson,
+  liveFingerprint: string | null,
+  graceExpired: boolean,
+): BadgeDisplay {
+  const d = decideBadge(state, liveFingerprint);
+  if (!graceExpired && d.label === 'tools changed') return decideBadge(state, null);
+  return d;
+}
+
 export function decideBadge(state: BadgeStateJson, liveFingerprint: string | null): BadgeDisplay {
   switch (state.state) {
     case 'unverified':

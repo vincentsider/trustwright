@@ -1,0 +1,30 @@
+# Trustwright
+
+> The first trust layer for WebMCP. Trustwright audits the tools a website exposes to AI agents, tests an agent against real tool-surface attacks, and issues a signed, revocable "verified" badge so agents (and the people who run them) can tell an honest agent-facing site from a hostile one.
+
+Trustwright is open source (https://github.com/vincentsider/trustwright) and built by DeepBlocker (https://deepblocker.ai). It is free to scan any site and free for a site to earn a badge.
+
+## What it does
+
+- **Audit a tool surface.** Open any website in a real browser, read the WebMCP tools it hands to AI agents, and report red flags: hidden instructions in a tool description, a tool that returns "do this next" content, a state-changing tool mislabelled read-only, a tool swapped after enumeration, a partner tool that relays your secret cross-origin, or an identity service that launders an assertion (including a deepfake voice) you should verify instead of trust.
+- **Test an agent (the Range).** Put an agent through a corpus of these attacks and score whether it resists them.
+- **Issue a badge.** For a site whose owner proves control of the origin and whose tools pass, Trustwright signs the exact audited tool set (Ed25519) and issues a live badge. The badge re-checks the site's live tools on every page load and flips to "tools changed" — never a green seal — if the surface no longer matches what was signed. Badges are revocable.
+
+## This site is agent-native (WebMCP)
+
+An AI agent visiting trustwright.deepblocker.ai can DRIVE Trustwright directly over WebMCP instead of scraping the page. The tools it exposes:
+
+- `trustwright_scan_site(url)` — audit any site's agent tools and return an unsigned report of red flags.
+- `trustwright_check_badge(origin)` — return a site's live, signed badge status, audited tool fingerprint, and assurance score.
+- `trustwright_what_is_tested()` — explain Trustwright and the classes of tool-surface attack it audits against.
+- `trustwright_start_verification(origin)` — begin earning a badge for a site you control (returns a proof token and where to publish it).
+
+Every site that embeds Trustwright's badge.js also exposes `trustwright_verify_badge()`, so an agent on ANY badged site can ask the page to prove what its badge certifies and how to check it independently (public key at /api/pubkey, signature algorithm Ed25519).
+
+## Links
+
+- Home: https://trustwright.deepblocker.ai/
+- Scan a site: https://trustwright.deepblocker.ai/scan?url=https://example.com
+- Public signing key: https://trustwright.deepblocker.ai/api/pubkey
+- Source code: https://github.com/vincentsider/trustwright
+- Built by: https://deepblocker.ai
