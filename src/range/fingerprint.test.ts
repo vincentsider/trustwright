@@ -199,6 +199,21 @@ describe('surface fingerprint — host-independent hints (openclawcity)', () => 
     expect(await fingerprintSurface(on)).not.toBe(await fingerprintSurface(off));
   });
 
+  it('an OVERSIZED JSON-string schema is bounded (skipped, not parsed) and dropped', async () => {
+    // DoS guard: /api/scan reads tools from an arbitrary page, so a huge schema
+    // string must not be JSON.parsed. Past the cap it is left as a string and
+    // dropped by plainObject — hashing like a tool that declared no schema, the
+    // same as an oversized OBJECT schema.
+    const big = JSON.stringify({
+      type: 'object',
+      properties: Object.fromEntries(Array.from({ length: 1000 }, (_, i) => [`p${i}`, { type: 'string' }])),
+    });
+    expect(big.length).toBeGreaterThan(8000);
+    const withBigString = [{ name: 'a', description: 'x', inputSchema: big }] as unknown as RegisteredTool[];
+    const noSchema: RegisteredTool[] = [{ name: 'a', description: 'x' }];
+    expect(await fingerprintSurface(withBigString)).toBe(await fingerprintSurface(noSchema));
+  });
+
   it('a full native-host view (string schema + stamps + false hints) equals the clean declared surface', async () => {
     // The clean, site-declared surface (what the scanner/polyfill reads).
     const declared: RegisteredTool[] = [

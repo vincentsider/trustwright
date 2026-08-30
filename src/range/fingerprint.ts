@@ -108,6 +108,12 @@ function plainObject(v: unknown): Record<string, unknown> | undefined {
  */
 function parseHostJson(v: unknown): unknown {
   if (typeof v !== 'string') return v;
+  // Bound the parse of an UNTRUSTED string. /api/scan is public and reads tools
+  // from an arbitrary page; without this, a hostile page returning 300 tools ×
+  // huge schema strings could pressure the worker isolate with JSON.parse. A
+  // string longer than the schema cap would be dropped after parse anyway
+  // (JSON.stringify(schema).length > FP_MAX_SCHEMA_CHARS), so skip it up front.
+  if (v.length > FP_MAX_SCHEMA_CHARS) return v;
   try {
     const parsed: unknown = JSON.parse(v);
     return parsed && typeof parsed === 'object' ? parsed : v;

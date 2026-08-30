@@ -117,6 +117,9 @@ function plainObject(v: unknown): Record<string, unknown> | undefined {
  *  verify read the identical shape; a non-object/non-JSON value is returned as-is. */
 function parseHostJson(v: unknown): unknown {
   if (typeof v !== 'string') return v;
+  // Bound the parse of an untrusted string (see fingerprint.ts parseHostJson):
+  // a string past the schema cap is dropped after parse anyway, so skip it.
+  if (v.length > MAX_SCHEMA_CHARS) return v;
   try {
     const parsed: unknown = JSON.parse(v);
     return parsed && typeof parsed === 'object' ? parsed : v;
