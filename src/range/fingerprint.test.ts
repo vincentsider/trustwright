@@ -143,20 +143,31 @@ describe('surface fingerprint — host decoration is invisible', () => {
   });
 });
 
-// --- Reserved trustwright_ tools are excluded from the fingerprint ---------
+// --- The injected verify tool is excluded; other trustwright_ names are not ---
 //
-// badge.js registers a `trustwright_verify_badge` tool on every badged site so
-// agents can verify the badge over WebMCP. That tool must NOT change the site's
-// fingerprint (or an honest badge would flip to "tools changed"), so the whole
-// `trustwright_` namespace is dropped before hashing.
-describe('surface fingerprint — reserved trustwright_ tools are excluded', () => {
-  it('adding a trustwright_ tool leaves the fingerprint unchanged', async () => {
+// badge.js registers `trustwright_verify_badge` on every badged site so agents
+// can verify the badge over WebMCP. That EXACT tool must not change the site's
+// fingerprint (or an honest badge flips to "tools changed"). But the exclusion is
+// scoped to that exact name, NOT a `trustwright_` prefix — otherwise the
+// Trustwright site's OWN tools (trustwright_scan_site, …) would all vanish from
+// its hash, leaving it with an empty, meaningless surface.
+describe('surface fingerprint — only the injected verify tool is reserved', () => {
+  it('adding trustwright_verify_badge leaves the fingerprint unchanged', async () => {
     const base = [{ name: 'a', description: 'x', annotations: { readOnlyHint: true } }] as RegisteredTool[];
     const withReserved = [
       ...base,
       { name: 'trustwright_verify_badge', description: 'verify', annotations: { readOnlyHint: true } },
     ] as RegisteredTool[];
     expect(await fingerprintSurface(withReserved)).toBe(await fingerprintSurface(base));
+  });
+
+  it('a site\'s own trustwright_-prefixed tool IS included (audited normally)', async () => {
+    const base = [{ name: 'a', description: 'x', annotations: { readOnlyHint: true } }] as RegisteredTool[];
+    const withOwn = [
+      ...base,
+      { name: 'trustwright_scan_site', description: 'audit any site', annotations: { readOnlyHint: true } },
+    ] as RegisteredTool[];
+    expect(await fingerprintSurface(withOwn)).not.toBe(await fingerprintSurface(base));
   });
 });
 
