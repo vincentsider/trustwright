@@ -201,6 +201,20 @@ describe('surface fingerprint — volatile schema values are dropped', () => {
     expect(await fingerprintSurface(renamed)).not.toBe(await fingerprintSurface(base));
     expect(await fingerprintSurface(retyped)).not.toBe(await fingerprintSurface(base));
   });
+
+  it('a CYCLIC schema (host self-reference) is dropped — no hang, and mint==verify', async () => {
+    // The volatile-strip must not hang on a cycle, and the cyclic schema must be
+    // DROPPED (matching the scan-time normalizeSurface, whose JSON.stringify
+    // throws) so the mint and live reads never diverge on it.
+    const schema: Record<string, unknown> = { type: 'object', properties: {} };
+    schema.self = schema; // cycle
+    const tool = { name: 'loop', description: 'x', inputSchema: schema } as unknown as RegisteredTool;
+    const a = await fingerprintSurface([tool]);
+    expect(a).toBe(await fingerprintSurface([tool])); // deterministic, no hang
+    expect(a).toMatch(/^[0-9a-f]{64}$/);
+    // Dropped ⇒ hashes identically to the same tool with no schema at all.
+    expect(a).toBe(await fingerprintSurface([{ name: 'loop', description: 'x' }]));
+  });
 });
 
 // --- Per-tool fingerprints: the subset live-check (dynamic surfaces) --------

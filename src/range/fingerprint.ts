@@ -134,17 +134,29 @@ function parseHostJson(v: unknown): unknown {
 // lists are dropped, so the fingerprint is stable under benign runtime change.
 const VOLATILE_SCHEMA_KEYS = new Set(['enum', 'const', 'default', 'examples']);
 
-function stripVolatileSchema(v: unknown): unknown {
-  if (Array.isArray(v)) return v.map(stripVolatileSchema);
-  if (v && typeof v === 'object') {
-    const out: Record<string, unknown> = {};
+// PATH-SCOPED cycle guard: a native host can stamp a self-referential object
+// into a schema, and stripVolatileSchema runs BEFORE the JSON.stringify cap that
+// would otherwise throw on a cycle — so without this it would infinite-loop and
+// hang the fingerprint (in the worker scan AND on a visitor's page). Add each
+// object on the way down, remove it on the way back up, so a true cycle breaks
+// to null while a shared sub-schema (a DAG, not a cycle) still serialises fully.
+function stripVolatileSchema(v: unknown, seen: WeakSet<object> = new WeakSet()): unknown {
+  if (v === null || typeof v !== 'object') return v;
+  if (seen.has(v)) return '[circular]';
+  seen.add(v);
+  let out: unknown;
+  if (Array.isArray(v)) {
+    out = v.map((x) => stripVolatileSchema(x, seen));
+  } else {
+    const o: Record<string, unknown> = {};
     for (const [k, val] of Object.entries(v as Record<string, unknown>)) {
       if (VOLATILE_SCHEMA_KEYS.has(k)) continue;
-      out[k] = stripVolatileSchema(val);
+      o[k] = stripVolatileSchema(val, seen);
     }
-    return out;
+    out = o;
   }
-  return v;
+  seen.delete(v);
+  return out;
 }
 
 /** Keep only primitive annotation values (drops nested/host junk); cap keys+strings.
@@ -189,15 +201,18 @@ export function canonicalizeTool(raw: unknown): FingerprintTool | null {
   // parseHostJson: a native host may serialise the schema to a JSON string.
   const schema = plainObject(parseHostJson(o.inputSchema));
   if (schema) {
-    // Drop volatile value lists (enum/const/default/examples) so a dynamic enum
-    // never moves the hash; keep the structural contract.
-    const skeleton = stripVolatileSchema(schema);
     try {
-      // JSON.stringify also rejects a cyclic schema (throws) — dropped on both
-      // sides identically, so a host-stamped cycle can never split the hash.
+      // Reject a cyclic/unserialisable schema FIRST (JSON.stringify throws on a
+      // cycle) so it is DROPPED here exactly as the scan-time normalizeSurface
+      // drops it — otherwise mint (schema gone) and verify (schema kept) would
+      // diverge on a host-stamped cycle. Only once it is known finite do we strip
+      // the volatile value lists (enum/const/default/examples), so a dynamic enum
+      // never moves the hash while the structural contract is kept.
+      JSON.stringify(schema);
+      const skeleton = stripVolatileSchema(schema);
       if (JSON.stringify(skeleton).length <= FP_MAX_SCHEMA_CHARS) inputSchema = skeleton;
     } catch {
-      /* unserialisable / cyclic — drop it */
+      /* cyclic / unserialisable — drop it (matches normalizeSurface) */
     }
   }
   // annotations likewise: parse a stringified object so a host that serialises
