@@ -275,6 +275,11 @@ export async function handleBadge(req: Request, env: Env): Promise<Response> {
  * Trustwright checked and why to trust it. Read-only, public, no ownership needed.
  */
 export async function handleReport(req: Request, env: Env): Promise<Response> {
+  // Public endpoint that runs two DB reads per call; cap per-IP so it cannot be
+  // hammered into DB pressure (the same limiter /api/scan uses).
+  if (!(await checkRate(env, `${clientIp(req)}:report`))) {
+    return jsonPublic({ error: 'rate_limited' }, { status: 429, req });
+  }
   const origin = normalizeOrigin(new URL(req.url).searchParams.get('origin'));
   if (!origin) return jsonPublic({ error: 'invalid origin' }, { status: 400, req });
   try {

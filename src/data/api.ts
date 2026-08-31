@@ -303,7 +303,7 @@ export interface StatsData {
   leads: number;
 }
 
-/** Admin: the success dashboard. Needs the admin token (x-admin-token). */
+/** The success dashboard. Needs the read-only stats token (or the admin token), sent as x-admin-token. */
 export async function getStats(token: string): Promise<{ ok: boolean; status: number; data: StatsData | null }> {
   try {
     const resp = await fetch(mode2Url('/api/stats'), { headers: { 'x-admin-token': token } });

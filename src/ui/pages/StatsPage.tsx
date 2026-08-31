@@ -8,7 +8,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { getStats, type StatsData } from '../../data/api.ts';
 
-const TOKEN_KEY = 'tw_admin_token';
+const TOKEN_KEY = 'tw_stats_token';
 
 function Tile({ label, value, sub }: { label: string; value: string | number; sub?: string }) {
   return (
@@ -81,9 +81,10 @@ export function StatsPage() {
 
       {!token && (
         <form onSubmit={saveToken} className="card" style={{ marginTop: 20 }}>
-          <h2 className="rep-h">Enter your admin token</h2>
+          <h2 className="rep-h">Enter your stats token</h2>
           <p className="muted" style={{ fontSize: 13.5, marginTop: 0 }}>
-            The same token used for operator endpoints. Stored only in this browser; sent only as a header.
+            A read-only token for this dashboard (STATS_TOKEN). It cannot mint or revoke badges. Stored only in this
+            browser, sent only as a header.
           </p>
           <div className="row" style={{ marginTop: 8 }}>
             <input

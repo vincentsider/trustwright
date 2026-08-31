@@ -246,6 +246,25 @@ describe('GET /api/stats', () => {
     const body = (await resp.json()) as Record<string, unknown>;
     expect(body).toMatchObject({ badges: { active: 2 }, scans: { total: 7 } });
   });
+
+  it('accepts the read-only STATS_TOKEN for reads', async () => {
+    stubDb();
+    const e = env({ STATS_TOKEN: 'stats-only' });
+    const resp = await worker.fetch(get('/api/stats', { 'x-admin-token': 'stats-only' }), e, ctx);
+    expect(resp.status).toBe(200);
+  });
+
+  it('the STATS_TOKEN does NOT unlock write endpoints (least privilege)', async () => {
+    stubDb({ verified: true });
+    scanResult({ host: 'polyfill', tools: scannedTools });
+    // A stats token presented to an ADMIN write endpoint is rejected.
+    const resp = await worker.fetch(
+      post('/api/audit/from-scan', { url: TARGET }, { 'x-admin-token': 'stats-only' }),
+      env({ STATS_TOKEN: 'stats-only' }),
+      ctx,
+    );
+    expect(resp.status).toBe(403);
+  });
 });
 
 describe('POST /api/audit/self', () => {

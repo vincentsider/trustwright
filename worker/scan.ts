@@ -227,10 +227,17 @@ export async function handleAuditSelf(req: Request, env: Env): Promise<Response>
 /** GET /api/stats -> aggregated success metrics (badges + sites, verification,
  *  scans, agent tests, leads). Admin-gated: it reveals business metrics. */
 export async function handleStats(req: Request, env: Env): Promise<Response> {
-  const provided = req.headers.get('x-admin-token') ?? '';
-  if (!env.ADMIN_TOKEN || !timingSafeEqual(provided, env.ADMIN_TOKEN)) {
-    return jsonPublic({ error: 'forbidden' }, { status: 403, req });
+  if (!(await checkRate(env, `${clientIp(req)}:stats`))) {
+    return jsonPublic({ error: 'rate_limited' }, { status: 429, req });
   }
+  // Least privilege: the read-only STATS_TOKEN unlocks the dashboard; the more
+  // powerful ADMIN_TOKEN (which also mints/revokes badges) still works for the
+  // operator. A stolen dashboard token can therefore only READ counts.
+  const provided = req.headers.get('x-admin-token') ?? '';
+  const ok =
+    (!!env.STATS_TOKEN && timingSafeEqual(provided, env.STATS_TOKEN)) ||
+    (!!env.ADMIN_TOKEN && timingSafeEqual(provided, env.ADMIN_TOKEN));
+  if (!ok) return jsonPublic({ error: 'forbidden' }, { status: 403, req });
   try {
     return jsonPublic(await getStats(env), { req });
   } catch {

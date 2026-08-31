@@ -57,7 +57,8 @@ export interface Env {
   RESEND_FROM?: string; // e.g. "Trustwright <reports@deepblocker.ai>"
   // Mode 2 signing + admin (secrets).
   ED25519_PRIVATE_KEY?: string; // PKCS8, base64 — signs badges/reports
-  ADMIN_TOKEN?: string; // gates POST /api/audit/revoke and /api/audit/from-scan
+  ADMIN_TOKEN?: string; // gates the WRITE ops: /api/audit/from-scan, /api/audit/revoke, /api/corpus/grant
+  STATS_TOKEN?: string; // READ-ONLY: gates /api/stats only (least privilege for the dashboard); ADMIN_TOKEN also works
   // (The Chrome WebMCP origin-trial token is served via public/_headers, not here —
   //  the asset server bypasses the Worker for static files.)
 
