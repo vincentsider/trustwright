@@ -521,6 +521,60 @@
   color: #a8c8e0;
 }
 
+/* ── Admin stats dashboard (/stats) ────────────────────────────────────── */
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 14px;
+}
+.stat-tile {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.02);
+  padding: 20px;
+}
+.stat-value {
+  font-size: 40px;
+  font-weight: 700;
+  line-height: 1;
+  color: #eaf3ff;
+}
+.stat-label {
+  margin-top: 10px;
+  font-size: 12.5px;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: #7fa8c8;
+}
+.stat-sub {
+  margin-top: 6px;
+  font-size: 12.5px;
+  color: #9db8cf;
+}
+.stat-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  font-size: 13.5px;
+}
+.stat-row:first-child {
+  border-top: 0;
+}
+.stat-row a {
+  color: var(--signal-bright, #22d3ee);
+  text-decoration: none;
+  word-break: break-all;
+}
+.stat-count {
+  font-family: 'IBM Plex Mono', ui-monospace, monospace;
+  color: #eaf3ff;
+  font-weight: 600;
+  flex: none;
+}
+
 /* ── App footer on console pages ──────────────────────────────────────── */
 .app-foot {
   border-top: 1px solid rgba(255, 255, 255, 0.1);

@@ -294,6 +294,31 @@ export async function getReport(origin: string): Promise<BadgeReport | null> {
   }
 }
 
+export interface StatsData {
+  generatedAt: string;
+  badges: { active: number; everMinted: number; sites: string[] };
+  verification: { started: number; verified: number };
+  scans: { total: number; last7d: number; uniqueSites: number; topSites: Array<{ origin: string; scans: number }> };
+  agentTests: { total: number; last7d: number; avgResistance: number | null };
+  leads: number;
+}
+
+/** Admin: the success dashboard. Needs the admin token (x-admin-token). */
+export async function getStats(token: string): Promise<{ ok: boolean; status: number; data: StatsData | null }> {
+  try {
+    const resp = await fetch(mode2Url('/api/stats'), { headers: { 'x-admin-token': token } });
+    let data: StatsData | null = null;
+    try {
+      data = (await resp.json()) as StatsData;
+    } catch {
+      data = null;
+    }
+    return { ok: resp.ok, status: resp.status, data };
+  } catch {
+    return { ok: false, status: 0, data: null };
+  }
+}
+
 export interface LeadResult {
   ok: boolean;
   /** True only if a report email was actually sent (Resend configured). */

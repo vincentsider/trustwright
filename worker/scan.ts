@@ -20,11 +20,11 @@
 // This keeps the founding rule intact: a signature exists only behind proven
 // origin control; everything else is an observation, labelled as such.
 
-import type { Env } from './types.ts';
+import type { Env, ExecutionContext } from './types.ts';
 import { jsonPublic } from './http.ts';
 import { checkRate, underDailyCap, clientIp } from './limits.ts';
 import { validateTools } from './badge.ts';
-import { getOrigin, insertAudit, supersedePriorAudits } from './audits.ts';
+import { getOrigin, insertAudit, supersedePriorAudits, logScanEvent, getStats } from './audits.ts';
 import { signEd25519, keyId, isSigningConfigured } from './crypto.ts';
 import { scanWithBrowser } from './browserScan.ts';
 import { isBlockedHostname } from './netguard.ts';
@@ -62,7 +62,7 @@ const SCAN_NOTE =
   'This is NOT a verified badge — heuristic findings are indicative only, and a signed badge requires proven origin control.';
 
 /** POST /api/scan { url } -> unsigned external preview of a page's tool surface. */
-export async function handleScan(req: Request, env: Env): Promise<Response> {
+export async function handleScan(req: Request, env: Env, ctx?: ExecutionContext): Promise<Response> {
   if (!(await checkRate(env, `${clientIp(req)}:scan`))) {
     return jsonPublic({ error: 'rate_limited' }, { status: 429, req });
   }
@@ -89,6 +89,10 @@ export async function handleScan(req: Request, env: Env): Promise<Response> {
   if (scan.host === 'error') {
     return jsonPublic({ error: scan.error ?? 'scan_failed' }, { status: 502, req });
   }
+  // Count this completed scan for success metrics (best-effort, off the response path).
+  const logScan = logScanEvent(env, target.origin);
+  if (ctx) ctx.waitUntil(logScan);
+  else void logScan;
   const scannedAt = new Date().toISOString();
   if (scan.host === 'none') {
     return jsonPublic(
@@ -218,6 +222,20 @@ export async function handleAuditSelf(req: Request, env: Env): Promise<Response>
     return jsonPublic({ error: 'origin not verified — complete /api/verify-origin first' }, { status: 403, req });
   }
   return mintScannedAudit(req, env, target);
+}
+
+/** GET /api/stats -> aggregated success metrics (badges + sites, verification,
+ *  scans, agent tests, leads). Admin-gated: it reveals business metrics. */
+export async function handleStats(req: Request, env: Env): Promise<Response> {
+  const provided = req.headers.get('x-admin-token') ?? '';
+  if (!env.ADMIN_TOKEN || !timingSafeEqual(provided, env.ADMIN_TOKEN)) {
+    return jsonPublic({ error: 'forbidden' }, { status: 403, req });
+  }
+  try {
+    return jsonPublic(await getStats(env), { req });
+  } catch {
+    return jsonPublic({ error: 'stats_failed' }, { status: 502, req });
+  }
 }
 
 /** POST /api/audit/from-scan { url } -> admin-gated variant for Trustwright operators. */

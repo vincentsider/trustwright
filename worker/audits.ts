@@ -226,6 +226,33 @@ export async function supersedePriorAudits(env: Env, origin: string, keepId: str
   });
 }
 
+/** Best-effort log of a consumer scan, for success metrics. No PII — just the
+ *  (public) scanned origin + a timestamp. Never throws: a metrics write must not
+ *  break the scan it is measuring. */
+export async function logScanEvent(env: Env, origin: string, kind = 'scan'): Promise<void> {
+  try {
+    await fetch(sbUrl(env, 'scan_events'), {
+      method: 'POST',
+      headers: sbHeaders(env, { Prefer: 'return=minimal' }),
+      body: JSON.stringify({ origin, kind }),
+    });
+  } catch {
+    /* metrics are best-effort */
+  }
+}
+
+/** The aggregated success dashboard (one RPC): badges + sites, verification,
+ *  scans, agent tests, leads. Service-role only. */
+export async function getStats(env: Env): Promise<unknown> {
+  const resp = await fetch(sbUrl(env, 'rpc/trustwright_stats'), {
+    method: 'POST',
+    headers: sbHeaders(env),
+    body: '{}',
+  });
+  if (!resp.ok) throw new Error(`stats rpc failed: ${resp.status}`);
+  return await resp.json();
+}
+
 /** Revoke every audit for an origin (or one id). Returns rows affected count is not tracked. */
 export async function revokeAudits(env: Env, opts: { origin?: string; id?: string }): Promise<void> {
   const filter = opts.id

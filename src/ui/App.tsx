@@ -11,7 +11,7 @@ import { Nav } from './Nav.tsx';
 // `.lp-foot`, and it renders on BOTH '/' and the '*' catch-all — so gating the
 // shared footer on `pathname === '/'` left every unknown path with a doubled
 // footer. Instead show app-foot ONLY on the concrete sub-routes.
-const APP_FOOTER_ROUTES = new Set(['/range', '/badge', '/embed', '/scan', '/report']);
+const APP_FOOTER_ROUTES = new Set(['/range', '/badge', '/embed', '/scan', '/report', '/stats']);
 
 export function App() {
   const showAppFooter = APP_FOOTER_ROUTES.has(useLocation().pathname);

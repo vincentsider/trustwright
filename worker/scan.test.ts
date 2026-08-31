@@ -42,12 +42,21 @@ const scannedTools = [
 
 /** Stub only the Supabase REST calls (browser is mocked separately). */
 function stubDb(opts: { verified?: boolean } = {}) {
-  const state = { auditInserted: false, supersedeUrl: '', insertBody: null as Record<string, unknown> | null };
+  const state = { auditInserted: false, supersedeUrl: '', insertBody: null as Record<string, unknown> | null, scanLogged: false };
   vi.stubGlobal(
     'fetch',
     vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const u = String(input);
       const method = init?.method ?? 'GET';
+      // Best-effort scan-event log (metrics) — accept it.
+      if (u.includes('/rest/v1/scan_events') && method === 'POST') {
+        state.scanLogged = true;
+        return new Response(null, { status: 201 });
+      }
+      // Stats RPC.
+      if (u.includes('/rest/v1/rpc/trustwright_stats') && method === 'POST') {
+        return new Response(JSON.stringify({ badges: { active: 2, everMinted: 3, sites: [] }, scans: { total: 7 } }), { status: 200 });
+      }
       if (u.includes('/rest/v1/origins') && method === 'GET') {
         return new Response(
           JSON.stringify([{ origin: 'https://city.example', challenge_token: 'tok', verified_at: opts.verified ? '2026-08-28T00:00:00Z' : null }]),
@@ -215,6 +224,27 @@ describe('POST /api/audit/from-scan', () => {
     );
     expect(resp.status).toBe(422);
     expect(await resp.json()).toMatchObject({ error: 'no_webmcp_host' });
+  });
+});
+
+describe('GET /api/stats', () => {
+  function get(path: string, headers: Record<string, string> = {}): Request {
+    return new Request(`https://trustwright.example${path}`, { method: 'GET', headers });
+  }
+
+  it('is admin-gated', async () => {
+    stubDb();
+    const resp = await worker.fetch(get('/api/stats'), env(), ctx);
+    expect(resp.status).toBe(403);
+    expect(await resp.json()).toMatchObject({ error: 'forbidden' });
+  });
+
+  it('returns the aggregated stats for a valid admin token', async () => {
+    stubDb();
+    const resp = await worker.fetch(get('/api/stats', { 'x-admin-token': 'admin-secret' }), env(), ctx);
+    expect(resp.status).toBe(200);
+    const body = (await resp.json()) as Record<string, unknown>;
+    expect(body).toMatchObject({ badges: { active: 2 }, scans: { total: 7 } });
   });
 });
 

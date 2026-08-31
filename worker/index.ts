@@ -26,7 +26,7 @@ import {
   handleManifest,
   handleGetManifest,
 } from './badge.ts';
-import { handleScan, handleAuditFromScan, handleAuditSelf } from './scan.ts';
+import { handleScan, handleAuditFromScan, handleAuditSelf, handleStats } from './scan.ts';
 import { handleGetCorpus, handleGrantCorpus } from './corpus.ts';
 import {
   fingerprintSurface,
@@ -197,7 +197,8 @@ export default {
       if (url.pathname === '/api/audit/revoke' && req.method === 'POST') return handleRevoke(req, env);
       if (url.pathname === '/api/audit/from-scan' && req.method === 'POST') return handleAuditFromScan(req, env);
       if (url.pathname === '/api/audit/self' && req.method === 'POST') return handleAuditSelf(req, env);
-      if (url.pathname === '/api/scan' && req.method === 'POST') return handleScan(req, env);
+      if (url.pathname === '/api/scan' && req.method === 'POST') return handleScan(req, env, ctx);
+      if (url.pathname === '/api/stats' && req.method === 'GET') return handleStats(req, env);
       if (url.pathname === '/api/badge' && req.method === 'GET') return handleBadge(req, env);
       if (url.pathname === '/api/report' && req.method === 'GET') return handleReport(req, env);
       if (url.pathname === '/api/pubkey' && req.method === 'GET') return handlePubkey(req, env);
