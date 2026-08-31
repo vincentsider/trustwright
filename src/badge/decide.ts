@@ -126,7 +126,7 @@ export function decideBadge(state: BadgeStateJson, liveFingerprint: string | nul
       // must never sit over an audit that found a confirmed red flag. Honesty
       // over reassurance: the tools ARE the audited ones, and one of them failed.
       if (state.flagged) {
-        return { label: 'tools flagged', tone: 'warn', sub: `a tool raised a red flag in audit — see report${score}` };
+        return { label: 'tools flagged', tone: 'warn', sub: `a tool raised a red flag in audit; see report${score}` };
       }
       if (liveFingerprint === null) {
         // No host to read on-page tools: show the signed state, do not claim a live check.

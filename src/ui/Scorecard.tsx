@@ -9,7 +9,7 @@ import { summarize } from '../range/scoring.ts';
 import { levelById } from '../range/corpusLoader.ts';
 
 function pct(score: number | null): string {
-  return score === null ? '—' : `${Math.round(score * 100)}%`;
+  return score === null ? 'n/a' : `${Math.round(score * 100)}%`;
 }
 
 function VerdictPill({ verdict }: { verdict: string }) {
@@ -46,7 +46,7 @@ export function Scorecard({
 
   const copy = async () => {
     try {
-      await navigator.clipboard.writeText(line + ' — tested with Trustwright');
+      await navigator.clipboard.writeText(line + '. Tested with Trustwright');
       setCopied(true);
       if (copyTimer.current) clearTimeout(copyTimer.current);
       copyTimer.current = setTimeout(() => setCopied(false), 1600);

@@ -107,7 +107,7 @@
     {
       name: 'trustwright_test_agent',
       description:
-        "Test an AI agent against Trustwright's tool-surface attack range: returns the interactive Range URL plus a structured self-test protocol — the attack classes to probe an agent with and what resisting each looks like — so you can evaluate whether an agent takes the bait.",
+        "Test an AI agent against Trustwright's tool-surface attack range: returns the interactive Range URL plus a structured self-test protocol (the attack classes to probe an agent with and what resisting each looks like) so you can evaluate whether an agent takes the bait.",
       inputSchema: { type: 'object', properties: {} },
       annotations: { readOnlyHint: true },
       execute: function () {

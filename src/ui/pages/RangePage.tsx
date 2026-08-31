@@ -147,7 +147,7 @@ export function RangePage() {
         <h1 className="cx-title">Put your agent on the range.</h1>
         <p className="cx-sub">
           Run it through a corpus of real tool-surface attacks and watch, live, what gets through. Every payload is an
-          inert marker — never a real exploit.
+          inert marker, never a real exploit.
         </p>
         <p style={{ marginTop: 18 }}>
           <span

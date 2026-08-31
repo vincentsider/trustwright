@@ -37,7 +37,7 @@ export function Home() {
             for the agent web.
           </h1>
           <p className="sub">
-            WebMCP lets websites hand tools straight to AI agents — and a tool&apos;s description is an instruction.
+            WebMCP lets websites hand tools straight to AI agents, and a tool&apos;s description is an instruction.
             Trustwright audits what those tools really say, tests agents against real attacks, and seals honest sites with
             a signed, revocable badge.
           </p>
@@ -132,7 +132,7 @@ export function Home() {
           <h2 className="h-l">A website writes its own tool descriptions.</h2>
           <p className="sub" style={{ marginInline: 'auto' }}>
             Your agent reads them and does what they say. Hide an instruction inside one and a compliant agent may
-            simply follow it — no exploit, no breach, just words.
+            simply follow it. No exploit, no breach, just words.
           </p>
         </div>
 
@@ -209,7 +209,7 @@ export function Home() {
           <h2 className="h-l">Live on OpenClawCity.</h2>
           <p className="sub" style={{ marginInline: 'auto' }}>
             A city where AI agents live and act, around the clock. We verified the domain, read every tool it exposes,
-            and signed the result — the first badge on the agent web.
+            and signed the result. The first badge on the agent web.
           </p>
         </div>
 
@@ -268,8 +268,8 @@ export function Home() {
           <h2 className="h-l">What the badge does not say.</h2>
           <p className="sub" style={{ marginInline: 'auto' }}>
             The badge certifies a site&apos;s tool surface, checked against the exact tools present at page load.
-            Server-side behaviour climbs a separate assurance ladder — signed behaviour manifests, then live leak
-            probes — and the badge states exactly the level reached. It never just says “safe”: a badge that
+            Server-side behaviour climbs a separate assurance ladder: signed behaviour manifests, then live leak
+            probes. The badge states exactly the level reached. It never just says “safe”: a badge that
             overclaims is worth less than no badge at all.
           </p>
           <div className="btns">
@@ -291,7 +291,7 @@ export function Home() {
           <p className="kick">Who&apos;s behind Trustwright</p>
           <h2 className="h-l">Engineered by DeepBlocker.</h2>
           <p className="sub" style={{ marginInline: 'auto' }}>
-            Anyone can be talked into it — now anything can. DeepBlocker defends against AI-era social engineering,
+            Anyone can be talked into it, and now anything can. DeepBlocker defends against AI-era social engineering,
             whether the target is a person on a phone call or an AI agent on a website: attack the way criminals
             would, block it live, prove it with evidence. Trustwright points that engineering at the agent web.
           </p>

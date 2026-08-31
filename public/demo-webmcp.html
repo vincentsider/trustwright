@@ -53,12 +53,12 @@
       <p>
         This page registers a small WebMCP tool surface so you can watch a live scan. Try it:
         <code>POST /api/scan { "url": "https://trustwright.deepblocker.ai/demo-webmcp" }</code>
-        — or paste this address into the scanner.
+        , or paste this address into the scanner.
       </p>
       <ul>
-        <li><code>search_articles</code> — read-only, benign</li>
-        <li><code>post_comment</code> — mutation, marked untrusted-content</li>
-        <li class="bad"><code>run_task</code> — carries a planted red flag for the scan to find</li>
+        <li><code>search_articles</code>: read-only, benign</li>
+        <li><code>post_comment</code>: mutation, marked untrusted-content</li>
+        <li class="bad"><code>run_task</code>: carries a planted red flag for the scan to find</li>
       </ul>
     </main>
     <!-- External (not inline) so it satisfies the site CSP script-src 'self'. -->

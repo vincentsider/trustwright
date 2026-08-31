@@ -77,7 +77,7 @@ export function BadgePage() {
 
   const placeStep =
     placement === 'inline'
-      ? 'No container needed. Put the <script> tag where the badge should appear — e.g. in the site footer, or in the header right after the logo. The badge renders inline at that spot.'
+      ? 'No container needed. Put the <script> tag where the badge should appear, e.g. in the site footer, or in the header right after the logo. The badge renders inline at that spot.'
       : placement === 'header'
         ? `Add this empty container in the header, immediately BEFORE the logo element so the badge sits to its left:\n${containerSnippet}\nThen add the <script> above once, in the root layout / index.html.`
         : placement === 'corner'
@@ -94,9 +94,9 @@ ${snippet}
 ${placeStep}
 
 Rules:
-- Do NOT change data-origin ("${origin || 'https://your-site.com'}") — it identifies the audited site.
+- Do NOT change data-origin ("${origin || 'https://your-site.com'}"); it identifies the audited site.
 - Do NOT hide the badge or restyle it to force a colour. It renders in a shadow DOM and shows the live, signed verdict; it must be left able to show the true state.
-- It links to the public Trustwright report — leave that link working.
+- It links to the public Trustwright report; leave that link working.
 - If the mount container is rendered by the app, make sure it exists within a few seconds of load (the badge waits up to 6s for it).`;
 
   return (
@@ -106,7 +106,7 @@ Rules:
         <h1 className="cx-title">Your badge, your way.</h1>
         <p className="cx-sub">
           One line of HTML. It re-checks your live tools on every page load and can never claim more than the truth.
-          Pick a look and a spot below — the snippet updates as you choose. No badge yet?{' '}
+          Pick a look and a spot below, and the snippet updates as you choose. No badge yet?{' '}
           <Link to="/badge">Get one first</Link>.
         </p>
       </div>
@@ -174,9 +174,9 @@ Rules:
           ))}
         </div>
         <p className="muted-3" style={{ fontSize: 12.5, margin: '8px 0 0' }}>
-          {placement === 'inline' && 'Appears right where you paste the line — great for a footer or About page.'}
+          {placement === 'inline' && 'Appears right where you paste the line, great for a footer or About page.'}
           {placement === 'header' && 'Sits to the left of your logo. Add the container below just before the logo in your header.'}
-          {placement === 'corner' && 'Floats in a fixed corner over your app — ideal for a full-screen 3D/2D world or canvas UI.'}
+          {placement === 'corner' && 'Floats in a fixed corner over your app, ideal for a full-screen 3D/2D world or canvas UI.'}
           {placement === 'custom' && 'Renders into any element you name with a CSS selector.'}
         </p>
         {placement === 'custom' && (
@@ -209,7 +209,7 @@ Rules:
         <strong style={{ color: 'var(--ink)' }}>What you can and can't change.</strong> You can restyle the
         badge's theme, size and position. You cannot change the <em>verdict</em>: the label and colour always
         come from the live, signed check, and the badge renders inside a shadow DOM so your page's CSS can't
-        repaint a warning green. That is the point — a badge only ever says what's true.
+        repaint a warning green. That is the point: a badge only ever says what's true.
       </div>
     </div>
   );

@@ -66,10 +66,10 @@ export function Controls({
 
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
         <button className="btn btn-primary" disabled={running} onClick={() => onRun('careful')}>
-          {running ? 'Running…' : 'Demo — careful agent'}
+          {running ? 'Running…' : 'Demo: careful agent'}
         </button>
         <button className="btn btn-ghost" disabled={running} onClick={() => onRun('compliant')}>
-          Demo — susceptible agent
+          Demo: susceptible agent
         </button>
       </div>
 

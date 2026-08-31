@@ -18,7 +18,7 @@ function verdict(r: BadgeReport): { label: string; tone: Tone; blurb: string } {
   switch (r.state) {
     case 'active':
       return r.flagged
-        ? { label: 'Tools flagged', tone: 'warn', blurb: 'Audited, but a tool raised a red flag — read the findings below.' }
+        ? { label: 'Tools flagged', tone: 'warn', blurb: 'Audited, but a tool raised a red flag. Read the findings below.' }
         : { label: 'Tools verified', tone: 'ok', blurb: 'Trustwright audited the tools this site exposes to AI agents and signed the result.' };
     case 'revoked':
       return { label: 'Badge revoked', tone: 'bad', blurb: 'This badge was withdrawn and no longer applies.' };
@@ -32,7 +32,7 @@ function verdict(r: BadgeReport): { label: string; tone: Tone; blurb: string } {
 }
 
 function day(iso?: string | null): string {
-  return iso ? new Date(iso).toISOString().slice(0, 10) : '—';
+  return iso ? new Date(iso).toISOString().slice(0, 10) : 'n/a';
 }
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
@@ -175,7 +175,7 @@ export function ReportPage() {
             <h2 className="rep-h">Verify this yourself</h2>
             <p className="muted" style={{ fontSize: 13.5, marginTop: 0 }}>
               The report is signed with Ed25519. Anyone can re-derive the fingerprint from the site&apos;s tools and check
-              the signature against Trustwright&apos;s public key — no trust in this page required.
+              the signature against Trustwright&apos;s public key. No trust in this page required.
             </p>
             {report.fingerprint && <Row label="Audited fingerprint"><code className="rep-code">{report.fingerprint}</code></Row>}
             {report.fingerprintAlgo && <Row label="Algorithm"><code className="rep-code">{report.fingerprintAlgo}</code></Row>}

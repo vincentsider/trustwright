@@ -283,7 +283,7 @@ function registerVerifyTool(
   if (w.__twVerifyToolRegistered) return true;
   const s = state as { assuranceScore?: number | null; fingerprint?: string; signedAt?: string };
   const staticInfo = {
-    badge: 'Trustwright — trust layer for the WebMCP agent web',
+    badge: 'Trustwright: trust layer for the WebMCP agent web',
     issuer: new URL(apiBase).host,
     subject: origin,
     status: state.state,

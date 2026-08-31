@@ -29,8 +29,8 @@ export function LeadCapture({ agentLabel, scorecardId }: { agentLabel: string; s
       <section className="card">
         <div className="card-title" style={{ color: 'var(--ok)' }}>
           {state === 'emailed'
-            ? 'Sent — check your inbox for the report.'
-            : 'Thanks — we’ve got your details and will be in touch.'}
+            ? 'Sent. Check your inbox for the report.'
+            : 'Thanks. We’ve got your details and will be in touch.'}
         </div>
       </section>
     );

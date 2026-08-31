@@ -7,7 +7,7 @@ import { useEffect, useState } from 'react';
 import { getLeaderboard, persistenceEnabled, type LeaderboardEntry } from '../data/api.ts';
 
 function pct(v: number | null): string {
-  return v === null ? '—' : `${Math.round(v * 100)}%`;
+  return v === null ? 'n/a' : `${Math.round(v * 100)}%`;
 }
 
 export function Leaderboard({ refreshKey }: { refreshKey: number }) {

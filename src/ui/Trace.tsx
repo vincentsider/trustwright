@@ -56,7 +56,7 @@ export function Trace({ bus, live }: { bus: TelemetryBus; live: boolean }) {
       <div className="card-head" style={{ padding: '14px 18px', marginBottom: 0, borderBottom: '1px solid var(--hair)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <span className="dot dot-live" style={{ opacity: live ? 1 : 0.3 }} />
-          <span className="card-title">Live trace — declared &rarr; observed</span>
+          <span className="card-title">Live trace: declared &rarr; observed</span>
         </div>
         <span className="mono" style={{ fontSize: 11, color: 'var(--ink-3)' }}>
           {events.length} events

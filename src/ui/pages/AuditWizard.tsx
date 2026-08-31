@@ -63,13 +63,13 @@ export function AuditWizard() {
     setBusy('');
     if (data?.verified) {
       setVerified(target.origin);
-      setNote({ kind: 'ok', text: `Ownership of ${target.origin} confirmed — continue to step 2.` });
+      setNote({ kind: 'ok', text: `Ownership of ${target.origin} confirmed. Continue to step 2.` });
     } else if (status === 0) {
       setNote({ kind: 'bad', text: 'Could not reach Trustwright. Check your connection and try again.' });
     } else {
       setNote({
         kind: 'warn',
-        text: `Not verified yet — we couldn't find the code at ${target.origin}. Publish it exactly (the file at ${instructions?.wellKnown.path ?? '/.well-known/trustwright-challenge.txt'}, OR the ${instructions?.dns.record ?? '_trustwright'} DNS TXT record), give DNS a minute to propagate, then check again.`,
+        text: `Not verified yet. We couldn't find the code at ${target.origin}. Publish it exactly (the file at ${instructions?.wellKnown.path ?? '/.well-known/trustwright-challenge.txt'}, OR the ${instructions?.dns.record ?? '_trustwright'} DNS TXT record), give DNS a minute to propagate, then check again.`,
       });
     }
   };
@@ -94,7 +94,7 @@ export function AuditWizard() {
       status === 422
         ? "Trustwright opened your page but found no agent tools an outside visitor can see. Make sure your WebMCP tools register on page load (external script, not blocked by your CSP)."
         : status === 403
-          ? 'That origin is not verified yet — finish step 1 first.'
+          ? 'That origin is not verified yet. Finish step 1 first.'
           : data?.error ?? 'The scan could not complete. Try again in a moment.';
     setNote({ kind: 'bad', text: msg });
   };
@@ -111,7 +111,7 @@ export function AuditWizard() {
         <h1 className="cx-title">Earn your Trustwright badge.</h1>
         <p className="cx-sub">
           Three steps, no code beyond pasting one line at the end. Trustwright reads your tools itself and signs the
-          result — you can&apos;t fake a pass, and neither can we.
+          result, so you can&apos;t fake a pass, and neither can we.
         </p>
       </div>
 
@@ -153,7 +153,7 @@ export function AuditWizard() {
       </div>
 
       <div className="steps">
-        {/* Step 1 — ownership */}
+        {/* Step 1: ownership */}
         <div className={`step ${step1Done ? 'done' : target ? 'active' : 'locked'}`}>
           <div className="stepnum">{step1Done ? '✓' : '1'}</div>
           <div className="step-body">
@@ -171,18 +171,18 @@ export function AuditWizard() {
                   instructions && (
                     <div>
                       <p className="muted" style={{ marginBottom: 4 }}>
-                        <strong>Option A — a file.</strong> Serve this exact text at{' '}
+                        <strong>Option A, a file.</strong> Serve this exact text at{' '}
                         <span className="mono" style={{ fontSize: 12 }}>{instructions.wellKnown.path}</span>:
                       </p>
                       <CodeBlock code={instructions.wellKnown.content} label="verification token" />
                       <p className="muted" style={{ margin: '10px 0 4px' }}>
-                        <strong>Option B — a DNS record.</strong> Add a TXT record{' '}
+                        <strong>Option B, a DNS record.</strong> Add a TXT record{' '}
                         <span className="mono" style={{ fontSize: 12 }}>{instructions.dns.record}</span> with value:
                       </p>
                       <CodeBlock code={instructions.dns.value} label="DNS TXT value" />
                       <div className="row" style={{ marginTop: 12 }}>
                         <button className="btn btn-primary" onClick={check} disabled={busy !== ''}>
-                          {busy === 'confirm' ? 'Checking…' : "I've published it — check now"}
+                          {busy === 'confirm' ? 'Checking…' : "I've published it, check now"}
                         </button>
                       </div>
                     </div>
@@ -205,7 +205,7 @@ export function AuditWizard() {
           </div>
         </div>
 
-        {/* Step 2 — scan + sign */}
+        {/* Step 2: scan + sign */}
         <div className={`step ${step2Done ? 'done' : step1Done ? 'active' : 'locked'}`}>
           <div className="stepnum">{step2Done ? '✓' : '2'}</div>
           <div className="step-body">
@@ -233,7 +233,7 @@ export function AuditWizard() {
           </div>
         </div>
 
-        {/* Step 3 — embed */}
+        {/* Step 3: embed */}
         <div className={`step ${step2Done ? 'active' : 'locked'}`}>
           <div className="stepnum">3</div>
           <div className="step-body">

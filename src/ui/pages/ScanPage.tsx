@@ -19,7 +19,7 @@ const ERR: Record<string, string> = {
   scan_bad_surface: 'That page exposes agent tools, but they were malformed.',
   blocked_host: 'That address is a private or internal host, which cannot be scanned.',
   scan_daily_cap: "Today's scan limit has been reached. Please try again tomorrow.",
-  rate_limited: 'Too many scans just now — give it a minute.',
+  rate_limited: 'Too many scans just now. Give it a minute.',
   'invalid url': 'That does not look like a valid web address (include https://).',
 };
 
@@ -54,7 +54,7 @@ export function ScanPage() {
         <h1 className="cx-title">Scan any site&apos;s agent tools.</h1>
         <p className="cx-sub">
           Paste a web address. Trustwright opens it in a real browser, reads the tools it hands to AI agents, and shows
-          you what they really say. A look, not a certificate — a signed badge needs the owner (
+          you what they really say. A look, not a certificate. A signed badge needs the owner (
           <Link to="/badge">get a badge</Link>).
         </p>
       </div>
@@ -89,7 +89,7 @@ export function ScanPage() {
       {busy && (
         <div className="notice" style={{ marginTop: 18 }}>
           <span className="spin" style={{ marginRight: 8, verticalAlign: 'middle' }} />
-          Opening the page in a browser and reading its tools — this can take a few seconds.
+          Opening the page in a browser and reading its tools. This can take a few seconds.
         </div>
       )}
 
