@@ -47,6 +47,8 @@ export interface Env {
   BADGE_TTL_DAYS?: string; // audit expiry, default 90
   OWNERSHIP_GRACE_DAYS?: string; // days a proof may be absent before revoke, default 3
   RECHECK_BATCH?: string; // max origins re-checked per cron tick, default 25
+  MONITOR_BATCH?: string; // max badges re-scanned per monitor tick, default 50
+  MONITOR_EXPIRY_WARN_DAYS?: string; // warn this many days before a badge expires, default 7
 
   // Secrets (wrangler secret put) — NEVER in wrangler.toml or the repo.
   SUPABASE_SERVICE_ROLE_KEY: string;
@@ -55,6 +57,12 @@ export interface Env {
   // without them, a lead is captured and emailed:false is returned.
   RESEND_API_KEY?: string;
   RESEND_FROM?: string; // e.g. "Trustwright <reports@deepblocker.ai>"
+  // Operator alerts via Postmark (badge drift / revoke / near-expiry). Both the
+  // server token and a destination address must be set to actually send; without
+  // them the monitor still runs and records health, it just does not email.
+  POSTMARK_SERVER_API_KEY?: string; // Postmark server token (X-Postmark-Server-Token)
+  POSTMARK_FROM?: string; // verified sender, default "Trustwright <shield@deepblocker.ai>"
+  ALERT_EMAIL?: string; // where badge-health alerts go (e.g. the operator)
   // Mode 2 signing + admin (secrets).
   ED25519_PRIVATE_KEY?: string; // PKCS8, base64 — signs badges/reports
   ADMIN_TOKEN?: string; // gates the WRITE ops: /api/audit/from-scan, /api/audit/revoke, /api/corpus/grant

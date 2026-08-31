@@ -7,6 +7,9 @@
 #   3b. wrangler secret put DEEPFAKE_ROUTER_URL      # optional (detector endpoint)
 #   3c. wrangler secret put RESEND_API_KEY           # optional (email delivery)
 #   3d. wrangler secret put RESEND_FROM              # optional (verified sender)
+#   3e. wrangler secret put POSTMARK_SERVER_API_KEY  # optional (badge-health alerts)
+#   3f. wrangler secret put ALERT_EMAIL              # optional (where alerts go)
+#   3g. wrangler secret put POSTMARK_FROM            # optional (verified sender; defaults in code)
 #   4. npm run build && wrangler deploy
 #
 # Secrets are NEVER placed in this file.
@@ -77,5 +80,6 @@ binding = "BROWSER"
 # Cron triggers:
 #   */3 * * * *  keep the detector warm across the judging window
 #   17 * * * *   hourly ownership re-check (revoke badges whose proof was pulled)
+#   23 6 * * *   daily badge-health monitor (re-scan surfaces, alert on drift/expiry)
 [triggers]
-crons = ["*/3 * * * *", "17 * * * *"]
+crons = ["*/3 * * * *", "17 * * * *", "23 6 * * *"]

@@ -40,6 +40,7 @@ import { sendReportEmail, isEmailConfigured } from './email.ts';
 import { checkRate, underDailyCap, clientIp } from './limits.ts';
 import { analyzeAudio, warmDetector, MAX_AUDIO_BYTES } from './detector.ts';
 import { runOwnershipRecheck } from './maintenance.ts';
+import { runBadgeMonitor, handleMonitorRun } from './monitor.ts';
 import { getOrigin } from './audits.ts';
 
 async function readJson(req: Request): Promise<unknown> {
@@ -199,6 +200,7 @@ export default {
       if (url.pathname === '/api/audit/self' && req.method === 'POST') return handleAuditSelf(req, env);
       if (url.pathname === '/api/scan' && req.method === 'POST') return handleScan(req, env, ctx);
       if (url.pathname === '/api/stats' && req.method === 'GET') return handleStats(req, env);
+      if (url.pathname === '/api/monitor/run' && req.method === 'POST') return handleMonitorRun(req, env);
       if (url.pathname === '/api/badge' && req.method === 'GET') return handleBadge(req, env);
       if (url.pathname === '/api/report' && req.method === 'GET') return handleReport(req, env);
       if (url.pathname === '/api/pubkey' && req.method === 'GET') return handlePubkey(req, env);
@@ -236,9 +238,14 @@ export default {
   // schedule does exactly its own job:
   //   "*/3 * * * *"  detector keep-warm (never cold in the judging window)
   //   "17 * * * *"   hourly ownership re-check (revoke badges whose proof left)
+  //   "23 6 * * *"   daily badge-health monitor (re-scan surfaces, alert on drift)
   async scheduled(event: { cron?: string }, env: Env, ctx: ExecutionContext): Promise<void> {
     if (event?.cron === '17 * * * *') {
       ctx.waitUntil(runOwnershipRecheck(env).then(() => undefined));
+      return;
+    }
+    if (event?.cron === '23 6 * * *') {
+      ctx.waitUntil(runBadgeMonitor(env).then(() => undefined));
       return;
     }
     ctx.waitUntil(warmDetector(env));

@@ -137,6 +137,42 @@ export function StatsPage() {
             )}
           </div>
 
+          {s.badgeHealth && s.badgeHealth.length > 0 && (
+            <div className="card" style={{ marginTop: 18 }}>
+              <h2 className="rep-h">
+                Badge health{' '}
+                <span className="muted-3" style={{ fontWeight: 400, fontSize: 13 }}>
+                  {s.badgeHealth.filter((b) => b.drifted).length} drifted · monitored daily
+                </span>
+              </h2>
+              <ul className="tool-list">
+                {s.badgeHealth.map((b) => {
+                  const checked = b.last_checked_at ? new Date(b.last_checked_at).toLocaleDateString() : 'not yet';
+                  const expires = b.expires_at ? new Date(b.expires_at).toLocaleDateString() : '—';
+                  return (
+                    <li key={b.origin} className="stat-row" style={{ alignItems: 'baseline' }}>
+                      <a href={`/report?origin=${encodeURIComponent(b.origin)}`} target="_blank" rel="noopener noreferrer" style={{ wordBreak: 'break-all' }}>
+                        {b.origin}
+                      </a>
+                      <span style={{ display: 'inline-flex', gap: 10, alignItems: 'baseline', flexShrink: 0 }}>
+                        <span className="muted-3" style={{ fontSize: 12 }}>checked {checked} · exp {expires}</span>
+                        <span
+                          className={`notice ${b.drifted ? 'bad' : ''}`}
+                          style={{ margin: 0, padding: '2px 9px', fontSize: 12, borderRadius: 999, fontWeight: 600 }}
+                        >
+                          {b.drifted ? 'tools changed' : 'verified'}
+                        </span>
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
+              <p className="muted-3" style={{ fontSize: 12, marginTop: 10, marginBottom: 0 }}>
+                A daily job re-scans each badge and emails the operator the moment one drifts, recovers, or nears expiry.
+              </p>
+            </div>
+          )}
+
           <div className="card" style={{ marginTop: 18 }}>
             <h2 className="rep-h">
               Most-scanned sites{' '}

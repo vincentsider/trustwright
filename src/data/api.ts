@@ -294,9 +294,18 @@ export async function getReport(origin: string): Promise<BadgeReport | null> {
   }
 }
 
+export interface BadgeHealthRow {
+  origin: string;
+  fingerprint: string; // left-12 of the sealed fingerprint
+  drifted: boolean;
+  last_checked_at: string | null;
+  expires_at: string | null;
+}
+
 export interface StatsData {
   generatedAt: string;
   badges: { active: number; everMinted: number; sites: string[] };
+  badgeHealth?: BadgeHealthRow[];
   verification: { started: number; verified: number };
   scans: { total: number; last7d: number; uniqueSites: number; topSites: Array<{ origin: string; scans: number }> };
   agentTests: { total: number; last7d: number; avgResistance: number | null };

@@ -42,6 +42,71 @@ function renderHtml(s: ScorecardSummary): string {
   );
 }
 
+// ── Operator alerts (Postmark) ───────────────────────────────────────────────
+//
+// Badge-health alerts (drift / revoke / near-expiry) go to the operator via
+// Postmark, independent of the Resend report path. Off unless BOTH a Postmark
+// server token and a destination address are configured. Never throws — the
+// monitor records health regardless of whether the email is accepted.
+
+const DEFAULT_ALERT_FROM = 'Trustwright <shield@deepblocker.ai>';
+
+export function isAlertConfigured(env: Env): boolean {
+  return !!(env.POSTMARK_SERVER_API_KEY && env.ALERT_EMAIL);
+}
+
+export interface BadgeAlert {
+  subject: string;
+  /** Plain-text lines; also rendered as an HTML list. */
+  lines: string[];
+  /** Optional lead paragraph above the list. */
+  intro?: string;
+}
+
+/** Send a badge-health alert to the operator via Postmark. Returns true only if
+ *  Postmark accepted it. Never throws. */
+export async function sendBadgeAlertEmail(env: Env, alert: BadgeAlert): Promise<boolean> {
+  if (!isAlertConfigured(env)) return false;
+  const from = env.POSTMARK_FROM || DEFAULT_ALERT_FROM;
+  const to = env.ALERT_EMAIL as string;
+  const intro = alert.intro ? `<p>${escapeHtml(alert.intro)}</p>` : '';
+  const items = alert.lines.map((l) => `<li>${escapeHtml(l)}</li>`).join('');
+  const html =
+    `<div style="font-family:system-ui,sans-serif;max-width:560px">` +
+    `<h2 style="margin:0 0 8px">Trustwright badge alert</h2>` +
+    intro +
+    `<ul style="color:#333;font-size:14px;line-height:1.6">${items}</ul>` +
+    `<p style="color:#888;font-size:12px">Automated monitor · trustwright.deepblocker.ai. ` +
+    `You are receiving this because you are the Trustwright operator.</p>` +
+    `</div>`;
+  const text =
+    `Trustwright badge alert\n\n` +
+    (alert.intro ? `${alert.intro}\n\n` : '') +
+    alert.lines.map((l) => `- ${l}`).join('\n') +
+    `\n\nAutomated monitor · trustwright.deepblocker.ai`;
+  try {
+    const resp = await fetch('https://api.postmarkapp.com/email', {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+        'X-Postmark-Server-Token': env.POSTMARK_SERVER_API_KEY as string,
+      },
+      body: JSON.stringify({
+        From: from,
+        To: to,
+        Subject: alert.subject,
+        HtmlBody: html,
+        TextBody: text,
+        MessageStream: 'outbound',
+      }),
+    });
+    return resp.ok;
+  } catch {
+    return false;
+  }
+}
+
 /** Send the report email. Returns true only if Resend accepted it. Never throws. */
 export async function sendReportEmail(env: Env, to: string, summary: ScorecardSummary): Promise<boolean> {
   if (!isEmailConfigured(env)) return false;

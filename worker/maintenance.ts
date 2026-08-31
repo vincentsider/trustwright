@@ -29,6 +29,7 @@ import {
   type RecheckRow,
 } from './audits.ts';
 import { probeControl } from './originVerify.ts';
+import { sendBadgeAlertEmail, isAlertConfigured } from './email.ts';
 
 const DEFAULT_GRACE_DAYS = 3;
 const DEFAULT_BATCH = 25;
@@ -108,6 +109,7 @@ export async function runOwnershipRecheck(env: Env, nowMs: number = Date.now()):
   if (rows.length === 0) return summary;
 
   const grace = graceMs(env);
+  const revokedOrigins: string[] = [];
   // Bounded concurrency: a shared cursor hands each worker the next row. Caps
   // parallel subrequests (Workers has a per-invocation subrequest budget) while
   // still overlapping the 8s-timeout probes.
@@ -120,9 +122,28 @@ export async function runOwnershipRecheck(env: Env, nowMs: number = Date.now()):
       const bucket = await recheckOne(env, row, nowMs, grace);
       summary.checked++;
       summary[bucket]++;
+      if (bucket === 'revoked') revokedOrigins.push(row.origin);
     }
   }
   const pool = Array.from({ length: Math.min(CONCURRENCY, rows.length) }, () => worker());
   await Promise.all(pool);
+
+  // A revocation is the most consequential badge event — the site lost its green
+  // seal because its ownership proof went away. Tell the operator (best-effort;
+  // never let an email failure change the re-check outcome).
+  if (revokedOrigins.length > 0 && isAlertConfigured(env)) {
+    try {
+      await sendBadgeAlertEmail(env, {
+        subject: `Trustwright badge alert — ${revokedOrigins.length} revoked`,
+        intro:
+          'A badge was revoked because its ownership proof (the /.well-known/trustwright-challenge.txt file or DNS TXT record) has been missing past the grace window.',
+        lines: revokedOrigins.map(
+          (o) => `${o} — badge revoked; restore the ownership proof and re-verify to reinstate it.`,
+        ),
+      });
+    } catch {
+      /* alerting is best-effort */
+    }
+  }
   return summary;
 }

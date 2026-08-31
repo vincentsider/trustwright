@@ -143,6 +143,53 @@ export async function getLatestAudit(env: Env, origin: string): Promise<AuditRow
   return rows[0] ?? null;
 }
 
+// ── Badge-health monitor (0010) ──────────────────────────────────────────────
+
+export interface MonitorAuditRow {
+  id: string;
+  origin: string;
+  fingerprint: string;
+  tool_fingerprints: string[] | null;
+  expires_at: string | null;
+  last_checked_at: string | null;
+  drift_detected_at: string | null;
+}
+
+/** Active audits to re-scan for drift: one non-revoked row per origin (the newest,
+ *  since supersede revokes the rest), oldest-checked first so a capped batch
+ *  rotates through every badge over successive runs. Already-expired audits are
+ *  left to the caller to skip. */
+export async function getActiveAuditsForMonitor(env: Env, limit: number): Promise<MonitorAuditRow[]> {
+  const capped = Math.max(1, Math.min(limit, 200));
+  const q =
+    'tool_audits?revoked_at=is.null' +
+    '&select=id,origin,fingerprint,tool_fingerprints,expires_at,last_checked_at,drift_detected_at' +
+    `&order=last_checked_at.asc.nullsfirst&limit=${capped}`;
+  const resp = await fetch(sbUrl(env, q), { headers: sbHeaders(env) });
+  if (!resp.ok) return [];
+  return (await resp.json()) as MonitorAuditRow[];
+}
+
+/** Record a monitor check on one audit: when it was last checked, the live
+ *  fingerprint we saw, and the drift transition (set drift_detected_at when drift
+ *  BEGINS, clear it when the surface recovers). Never throws — health tracking
+ *  must not break the monitor loop. */
+export async function updateAuditHealth(
+  env: Env,
+  id: string,
+  patch: { last_checked_at: string; last_live_fingerprint?: string | null; drift_detected_at?: string | null },
+): Promise<void> {
+  try {
+    await fetch(sbUrl(env, `tool_audits?id=eq.${encodeURIComponent(id)}`), {
+      method: 'PATCH',
+      headers: sbHeaders(env, { Prefer: 'return=minimal' }),
+      body: JSON.stringify(patch),
+    });
+  } catch {
+    /* health tracking is best-effort */
+  }
+}
+
 export interface ManifestInsert {
   origin: string;
   fingerprint: string;
