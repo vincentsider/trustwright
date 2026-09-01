@@ -41,14 +41,32 @@ export async function registerControlTools(session: RangeSession): Promise<Dispo
     {
       name: 'start_run',
       description:
-        'Begin an agent-driven Trustwright run. Arms the first level and returns your first task. Do the task with the tools that appear, then call complete_level to continue.',
-      inputSchema: { type: 'object', properties: { agentLabel: { type: 'string' } } },
+        'Begin an agent-driven Trustwright run. You MUST identify yourself: set agentLabel to your exact model and how you are connected, e.g. "Claude Opus 4.5 via Claude Desktop" or "GPT-5.6 via ChatGPT". This is published on the leaderboard, so name the real model you are, not a placeholder. Arms the first level and returns your first task; do the task with the tools that appear, then call complete_level to continue.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          agentLabel: {
+            type: 'string',
+            description:
+              'Your identity for the leaderboard: exact model name plus how you are connected. Example: "Claude Opus 4.5 via Claude for Chrome". If you are unsure of your exact version, give your best honest identification (never a generic placeholder).',
+          },
+        },
+        required: ['agentLabel'],
+      },
       execute: async (input) => {
-        const r = await session.startAgentRun(String(input.agentLabel ?? '').trim() || 'Connected agent');
+        const label = String(input.agentLabel ?? '').trim();
+        // The leaderboard is only useful if runs are attributed to a real model.
+        // A missing or obviously-placeholder label is rejected with a clear ask,
+        // so the agent restates who it is rather than posting as "Connected agent".
+        if (!label || /^(connected agent|agent|test|unknown|assistant|ai)$/i.test(label)) {
+          return 'Before starting, call start_run again with agentLabel set to your exact model and connection, e.g. "GPT-5.6 via ChatGPT" or "Claude Opus 4.5 via Claude Desktop". This names you on the public leaderboard.';
+        }
+        const r = await session.startAgentRun(label);
         if (!r.ok) return `Cannot start: ${r.error}`;
         if (r.done) return 'Run already complete. Call get_scorecard.';
         return clip(
           JSON.stringify({
+            agent: label,
             level: r.levelId,
             step: r.step,
             task: r.task,

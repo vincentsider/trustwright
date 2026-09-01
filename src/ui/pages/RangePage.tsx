@@ -191,6 +191,7 @@ export function RangePage() {
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+          <Leaderboard refreshKey={leaderboardKey} />
           <Scorecard
             scorecard={scorecard}
             agentLabel={state.agentLabel || agentLabel}
@@ -199,7 +200,6 @@ export function RangePage() {
           {state.status === 'done' && (
             <LeadCapture agentLabel={state.agentLabel || agentLabel} scorecardId={scorecardId} />
           )}
-          <Leaderboard refreshKey={leaderboardKey} />
         </div>
       </div>
     </div>

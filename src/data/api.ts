@@ -12,7 +12,18 @@ import type { Scorecard, LevelResult } from '../range/scoring.ts';
 
 // Empty string => same-origin (Worker serves the SPA). Undefined var => no
 // backend configured => persistence disabled.
-const ORIGIN: string | undefined = import.meta.env.VITE_WORKER_ORIGIN;
+//
+// This module is also pulled into the Worker bundle (the range engine reuses the
+// corpus, whose voice-detector capability imports this file). In that runtime
+// `import.meta.env` does not exist, so the access is guarded: the guard branch
+// keeps the literal `import.meta.env.VITE_WORKER_ORIGIN` that Vite statically
+// replaces in the browser build, while the Worker falls through to undefined
+// (persistence off), which makes the capability return its deterministic
+// fallback with no network call.
+const ORIGIN: string | undefined =
+  typeof import.meta === 'object' && (import.meta as { env?: unknown }).env
+    ? import.meta.env.VITE_WORKER_ORIGIN
+    : undefined;
 
 /** Whether a backend is configured at all. */
 export function persistenceEnabled(): boolean {

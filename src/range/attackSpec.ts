@@ -20,7 +20,7 @@
 // on teardown (dispose()), reusing shim.ts's registerAll disposer discipline.
 
 import type { JsonSchema, ToolAnnotations, ModelContextTool } from '../webmcp/types.ts';
-import { registerAll, type Disposer } from '../webmcp/shim.ts';
+import { registerAllOn, type Disposer } from '../webmcp/shim.ts';
 import { canaryPresent } from './canary.ts';
 import type { TelemetryKind } from './telemetry.ts';
 import type { Verdict } from './scoring.ts';
@@ -425,7 +425,7 @@ export function buildLevelFromSpec(spec: AttackSpec): LevelDefinition {
         clearTimer();
         currentDisposer(); // dispose the previous phase's tools
         currentPhase = phase;
-        currentDisposer = await registerAll(phase.tools.map(toModelTool));
+        currentDisposer = await registerAllOn(ctx.host, phase.tools.map(toModelTool));
         if (disposed) {
           currentDisposer();
           return;

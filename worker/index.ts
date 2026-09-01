@@ -27,6 +27,7 @@ import {
   handleGetManifest,
 } from './badge.ts';
 import { handleScan, handleAuditFromScan, handleAuditSelf, handleStats } from './scan.ts';
+import { handleRangeStart, handleRangeAct, handleRangeComplete, handleRangeState } from './range.ts';
 import { handleGetCorpus, handleGrantCorpus } from './corpus.ts';
 import {
   fingerprintSurface,
@@ -156,6 +157,10 @@ export default {
       '/api/pubkey',
       '/api/manifest',
       '/api/corpus',
+      '/api/range/start',
+      '/api/range/act',
+      '/api/range/complete_level',
+      '/api/range/state',
     ]);
 
     if (req.method === 'OPTIONS') {
@@ -201,6 +206,11 @@ export default {
       if (url.pathname === '/api/scan' && req.method === 'POST') return handleScan(req, env, ctx);
       if (url.pathname === '/api/stats' && req.method === 'GET') return handleStats(req, env);
       if (url.pathname === '/api/monitor/run' && req.method === 'POST') return handleMonitorRun(req, env);
+      // Browserless gauntlet (no WebMCP host needed): drive the same corpus over HTTP.
+      if (url.pathname === '/api/range/start' && req.method === 'POST') return handleRangeStart(req, env);
+      if (url.pathname === '/api/range/act' && req.method === 'POST') return handleRangeAct(req, env);
+      if (url.pathname === '/api/range/complete_level' && req.method === 'POST') return handleRangeComplete(req, env);
+      if (url.pathname === '/api/range/state' && req.method === 'GET') return handleRangeState(req, env);
       if (url.pathname === '/api/badge' && req.method === 'GET') return handleBadge(req, env);
       if (url.pathname === '/api/report' && req.method === 'GET') return handleReport(req, env);
       if (url.pathname === '/api/pubkey' && req.method === 'GET') return handlePubkey(req, env);

@@ -74,7 +74,22 @@ export async function registerTool(
 ): Promise<Disposer> {
   const { host } = resolveHost();
   if (!host) return () => {};
+  return registerToolOn(host, tool, options);
+}
 
+/**
+ * Register one tool against an EXPLICIT host, rather than the resolved global.
+ * Same disposer discipline as registerTool. This is the seam that lets a
+ * non-browser caller (the server-side gauntlet) drive the exact same level
+ * engine against an in-memory host, so the browser and HTTP paths cannot
+ * diverge. In the browser, `host` is simply resolveHost().host, so behaviour is
+ * identical to before.
+ */
+export async function registerToolOn(
+  host: ModelContextHost,
+  tool: ModelContextTool,
+  options: RegisterToolOptions = {},
+): Promise<Disposer> {
   const controller = new AbortController();
   // If the caller passed their own signal, chain it so either source tears down.
   if (options.signal) {
@@ -110,7 +125,18 @@ export async function registerAll(
   tools: ModelContextTool[],
   options: RegisterToolOptions = {},
 ): Promise<Disposer> {
-  let disposers: Disposer[] = await Promise.all(tools.map((t) => registerTool(t, options)));
+  const { host } = resolveHost();
+  if (!host) return () => {};
+  return registerAllOn(host, tools, options);
+}
+
+/** registerAll against an EXPLICIT host (see registerToolOn). */
+export async function registerAllOn(
+  host: ModelContextHost,
+  tools: ModelContextTool[],
+  options: RegisterToolOptions = {},
+): Promise<Disposer> {
+  let disposers: Disposer[] = await Promise.all(tools.map((t) => registerToolOn(host, t, options)));
   let disposed = false;
   return () => {
     if (disposed) return;
