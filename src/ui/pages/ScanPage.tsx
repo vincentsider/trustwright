@@ -80,6 +80,67 @@ export function verdictOf(result: ScanResult): Verdict {
 const TONE_COLOR: Record<Tone, string> = { ok: 'var(--ok)', warn: 'var(--warn)', bad: 'var(--danger)' };
 const TONE_SOFT: Record<Tone, string> = { ok: 'var(--ok-soft)', warn: 'var(--warn-soft)', bad: 'var(--danger-soft)' };
 
+/** A concrete, plain-language worst-case for one flagged finding, tied to the
+ *  tool it came from. This is the "what could actually go wrong" translation of a
+ *  technical check, not fear-mongering: for a clean, read-only site the answer is
+ *  honestly reassuring. */
+function scenarioFor(check: string, tool: string): string {
+  switch (check) {
+    case 'T1':
+      return `${tool}'s description hides an instruction, so your agent could be talked into an action you never asked for.`;
+    case 'T2':
+      return `${tool} returns outside content that could carry hidden instructions your agent then follows.`;
+    case 'T3':
+      return `The tools here can change after your agent inspects them, so what it approved may not be what actually runs.`;
+    case 'T5':
+      return `${tool} is labelled read-only but can change data, so your agent might act while thinking it was only looking.`;
+    case 'T6':
+      return `${tool} takes an input that could send your data to another site.`;
+    case 'T7':
+      return `${tool} claims something was verified; an agent that believes the claim could act on a false assurance.`;
+    default:
+      return `${tool} raised a flag worth understanding before you let an agent use it.`;
+  }
+}
+
+/** The "what's the worst that could happen" answer: up to three concrete
+ *  scenarios from the flagged findings (worst first), or, if nothing was flagged,
+ *  a capability-based line (reassuring when everything is read-only). */
+export function worstCase(result: ScanResult): { tone: Tone; lines: string[] } {
+  const tools = result.toolsDetail ?? [];
+  const flagged = result.findings.filter((f) => f.verdict !== 'PASS');
+  const sorted = [...flagged].sort((a, b) => (b.verdict === 'FAIL' ? 1 : 0) - (a.verdict === 'FAIL' ? 1 : 0));
+
+  const seen = new Set<string>();
+  const lines: string[] = [];
+  for (const f of sorted) {
+    const line = scenarioFor(f.check, f.toolName ?? 'A tool');
+    if (seen.has(line)) continue;
+    seen.add(line);
+    lines.push(line);
+    if (lines.length >= 3) break;
+  }
+
+  if (lines.length === 0) {
+    const canAct = tools.filter((t) => !t.readOnly);
+    if (canAct.length === 0) {
+      return {
+        tone: 'ok',
+        lines: ['Not much. Every tool here only reads data, so even a tricked agent could look but not change or send anything.'],
+      };
+    }
+    const names = canAct.slice(0, 3).map((t) => t.name).join(', ');
+    return {
+      tone: 'warn',
+      lines: [
+        `Nothing jumped out, but ${canAct.length} tool${canAct.length === 1 ? '' : 's'} can take an action (${names}). The worst case depends on those being used as intended, so let your agent act deliberately.`,
+      ],
+    };
+  }
+
+  return { tone: flagged.some((f) => f.verdict === 'FAIL') ? 'bad' : 'warn', lines };
+}
+
 function ScoreRing({ score, tone }: { score: number; tone: Tone }) {
   const r = 30;
   const c = 2 * Math.PI * r;
@@ -164,6 +225,29 @@ function ToolCard({ tool, findings }: { tool: AuditedTool; findings: ScanFinding
           {f.evidence ? ` — ${f.evidence}` : ''}
         </p>
       ))}
+    </div>
+  );
+}
+
+function WorstCase({ result }: { result: ScanResult }) {
+  const { tone, lines } = worstCase(result);
+  const color = TONE_COLOR[tone];
+  return (
+    <div className="card" style={{ borderColor: color }}>
+      <div className="card-head" style={{ marginBottom: 12 }}>
+        <span className="card-title">What&rsquo;s the worst that could happen?</span>
+        <span aria-hidden style={{ fontSize: 16 }}>
+          {tone === 'ok' ? '🙂' : tone === 'warn' ? '🤔' : '😬'}
+        </span>
+      </div>
+      <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 10 }}>
+        {lines.map((l, i) => (
+          <li key={i} style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+            <span style={{ color, marginTop: 2, flexShrink: 0 }}>{tone === 'ok' ? '✓' : '•'}</span>
+            <span style={{ fontSize: 13.5, color: 'var(--ink)', lineHeight: 1.55 }}>{l}</span>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
@@ -340,6 +424,9 @@ function ScanResultView({ result, showTech, onToggleTech }: { result: ScanResult
           {v.meaning}
         </p>
       </div>
+
+      {/* What's the worst that could happen */}
+      <WorstCase result={result} />
 
       {/* The tools, visualized */}
       {tools.length > 0 && (

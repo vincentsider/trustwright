@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { verdictOf } from './ScanPage.tsx';
+import { verdictOf, worstCase } from './ScanPage.tsx';
 import type { ScanResult, AuditedTool, ScanFinding } from '../../data/api.ts';
 
 function tool(name: string, readOnly: boolean, untrusted = false): AuditedTool {
@@ -55,5 +55,42 @@ describe('verdictOf (plain-language scan summary)', () => {
   it('describes an all-acting surface', () => {
     const v = verdictOf(result([tool('act', false)]));
     expect(v.summary).toContain('take an action');
+  });
+});
+
+describe('worstCase', () => {
+  it('is reassuring when every tool is read-only and clean', () => {
+    const w = worstCase(result([tool('read_a', true), tool('read_b', true)]));
+    expect(w.tone).toBe('ok');
+    expect(w.lines).toHaveLength(1);
+    expect(w.lines[0]).toMatch(/only reads data|look but not change/i);
+  });
+
+  it('warns about acting tools even with no flags', () => {
+    const w = worstCase(result([tool('read', true), tool('run_task', false)]));
+    expect(w.tone).toBe('warn');
+    expect(w.lines[0]).toContain('run_task');
+  });
+
+  it('gives a concrete off-site-relay scenario for a T6 flag', () => {
+    const relay: ScanFinding = { toolName: 'run_task', check: 'T6', verdict: 'FAIL', layer: 'x' };
+    const w = worstCase(result([tool('run_task', false)], [relay]));
+    expect(w.tone).toBe('bad');
+    expect(w.lines[0]).toContain('run_task');
+    expect(w.lines[0]).toMatch(/send your data to another site/i);
+  });
+
+  it('lists worst (FAIL) scenarios before softer ones, capped at 3, deduped', () => {
+    const findings: ScanFinding[] = [
+      { toolName: 'a', check: 'T2', verdict: 'PARTIAL', layer: 'x' },
+      { toolName: 'b', check: 'T5', verdict: 'FAIL', layer: 'x' },
+      { toolName: 'c', check: 'T1', verdict: 'PARTIAL', layer: 'x' },
+      { toolName: 'd', check: 'T6', verdict: 'PARTIAL', layer: 'x' },
+    ];
+    const w = worstCase(result([tool('b', false)], findings));
+    expect(w.tone).toBe('bad');
+    expect(w.lines).toHaveLength(3);
+    expect(w.lines[0]).toContain('b'); // the FAIL comes first
+    expect(w.lines[0]).toMatch(/read-only but can change data/i);
   });
 });
