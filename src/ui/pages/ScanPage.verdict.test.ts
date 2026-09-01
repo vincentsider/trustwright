@@ -56,6 +56,15 @@ describe('verdictOf (plain-language scan summary)', () => {
     const v = verdictOf(result([tool('act', false)]));
     expect(v.summary).toContain('take an action');
   });
+
+  it('counts the AUDITED tools, not the raw count (badged sites carry an extra verify tool)', () => {
+    // A badged site reports tools:3 raw, but toolsDetail excludes the injected
+    // trustwright_verify_badge, so we must say "2 tools", matching the cards.
+    const r = { ...result([tool('a', true), tool('b', true)]), tools: 3 };
+    const v = verdictOf(r);
+    expect(v.summary).toContain('offers your agent 2 tools');
+    expect(v.summary).not.toContain('3 tools');
+  });
 });
 
 describe('worstCase', () => {

@@ -46,15 +46,18 @@ export interface AuditedTool {
   params: string[];
 }
 
+const TOOL_DESC_MAX = 600; // display cap; bounds the scan response for a hostile 300-tool page
+
 export function toAuditedTools(tools: RegisteredTool[]): AuditedTool[] {
   return tools
     .filter((t) => !RESERVED_TOOL_NAMES.has(t.name))
     .map((t) => {
       const props =
         t.inputSchema && typeof t.inputSchema === 'object' ? (t.inputSchema as { properties?: unknown }).properties : undefined;
+      const desc = typeof t.description === 'string' ? t.description : '';
       return {
         name: t.name,
-        description: typeof t.description === 'string' ? t.description : '',
+        description: desc.length > TOOL_DESC_MAX ? desc.slice(0, TOOL_DESC_MAX) + '…' : desc,
         readOnly: (t.annotations as { readOnlyHint?: unknown } | undefined)?.readOnlyHint === true,
         untrusted: (t.annotations as { untrustedContentHint?: unknown } | undefined)?.untrustedContentHint === true,
         params: props && typeof props === 'object' ? Object.keys(props as Record<string, unknown>).slice(0, 40) : [],

@@ -53,9 +53,13 @@ export function verdictOf(result: ScanResult): Verdict {
   const failed = flagged.some((f) => f.verdict === 'FAIL');
   const tone: Tone = failed ? 'bad' : flagged.length > 0 ? 'warn' : 'ok';
 
+  // Count what we actually SHOW: the audited tools, which exclude Trustwright's
+  // own injected verify tool. Using the raw `result.tools` would over-count by
+  // one on any badged site (where trustwright_verify_badge is registered).
+  const n = result.toolsDetail ? tools.length : result.tools;
   const site = hostOf(result.origin);
-  const toolWord = result.tools === 1 ? 'tool' : 'tools';
-  const parts = [`${site} offers your agent ${result.tools} ${toolWord}.`];
+  const toolWord = n === 1 ? 'tool' : 'tools';
+  const parts = [`${site} offers your agent ${n} ${toolWord}.`];
   if (tools.length) {
     if (canAct === 0) parts.push('All of them only read data; none can change anything.');
     else if (readOnly === 0) parts.push(`${canAct === 1 ? 'It can take an action' : 'They can take actions'}, not just read.`);
@@ -363,7 +367,7 @@ export function ScanPage() {
 
       {result && !busy && (
         <div style={{ marginTop: 24, display: 'flex', flexDirection: 'column', gap: 18 }}>
-          {result.host === 'none' || result.tools === 0 ? (
+          {result.host === 'none' || (result.toolsDetail?.length ?? result.tools) === 0 ? (
             <div className="card">
               <div className="scan-verdict warn">
                 <p className="sv-line">No agent tools found.</p>
