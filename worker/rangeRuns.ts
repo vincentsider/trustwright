@@ -93,3 +93,43 @@ export async function updateRun(
   });
   if (!resp.ok) throw new Error(`range_runs update failed: ${resp.status}`);
 }
+
+/**
+ * Atomically transition a run running -> done, returning true only if THIS call
+ * made the transition. The filter `status=eq.running` means a second finisher
+ * (a retry or a concurrent request) matches zero rows and returns false, so the
+ * scorecard is posted to the leaderboard exactly once. Returns false on any
+ * error too (fail closed: no post rather than a double post).
+ */
+export async function claimFinish(
+  env: Env,
+  token: string,
+  patch: { results: LevelVerdict[]; finished_at: string },
+): Promise<boolean> {
+  try {
+    const resp = await fetch(sbUrl(env, `range_runs?token=eq.${encodeURIComponent(token)}&status=eq.running`), {
+      method: 'PATCH',
+      headers: sbHeaders(env, { Prefer: 'return=representation' }),
+      body: JSON.stringify({ ...patch, status: 'done', updated_at: new Date().toISOString() }),
+    });
+    if (!resp.ok) return false;
+    const rows = (await resp.json()) as unknown[];
+    return Array.isArray(rows) && rows.length > 0;
+  } catch {
+    return false;
+  }
+}
+
+/** Reap abandoned runs (last touched before `beforeIso`). Best-effort: a failed
+ *  sweep must never break the caller (a cron). Bounds table growth from starts
+ *  that are never finished. */
+export async function deleteStaleRuns(env: Env, beforeIso: string): Promise<void> {
+  try {
+    await fetch(sbUrl(env, `range_runs?updated_at=lt.${encodeURIComponent(beforeIso)}`), {
+      method: 'DELETE',
+      headers: sbHeaders(env, { Prefer: 'return=minimal' }),
+    });
+  } catch {
+    /* best-effort reaper */
+  }
+}

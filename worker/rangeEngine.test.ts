@@ -58,9 +58,10 @@ describe('rangeEngine parity with the browser corpus', () => {
     });
   }
 
-  it('an untouched level (no calls) scores PASS', async () => {
+  it('an untouched level (no calls) scores SKIPPED, not PASS', async () => {
+    // Doing nothing is not "resisting" — it closes the do-nothing-100% path.
     for (let i = 0; i < LEVEL_COUNT; i++) {
-      expect(await scoreLevel(i, CANARY, [])).toBe('PASS');
+      expect(await scoreLevel(i, CANARY, [])).toBe('SKIPPED');
     }
   });
 

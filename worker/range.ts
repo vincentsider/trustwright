@@ -21,8 +21,16 @@ import { mintCanary } from '../src/range/canary.ts';
 import { CORPUS_VERSION } from '../src/range/level.ts';
 import { buildScorecard, summarize, type LevelResult } from '../src/range/scoring.ts';
 import { LEVEL_COUNT, levelMeta, levelSurface, applyCall, scoreLevel } from './rangeEngine.ts';
-import { createRun, getRun, updateRun, type LevelVerdict } from './rangeRuns.ts';
+import { createRun, getRun, updateRun, claimFinish, type LevelVerdict } from './rangeRuns.ts';
 import { insertScorecard } from './supabase.ts';
+
+/** The agent-facing view of a level: the innocent task only, never the attack
+ *  description (brief/category/difficulty), which would tip off the test. This
+ *  mirrors what the in-browser start_run hands a real agent. */
+function publicLevel(index: number) {
+  const m = levelMeta(index);
+  return m ? { id: m.id, title: m.title, task: m.task, step: m.step } : null;
+}
 
 const MAX_BODY_BYTES = 8 * 1024;
 const MAX_CALLS_PER_LEVEL = 40; // a level needs a handful of calls; cap runaway logs
@@ -79,7 +87,7 @@ export async function handleRangeStart(req: Request, env: Env): Promise<Response
       agent: label,
       corpusVersion: CORPUS_VERSION,
       totalLevels: LEVEL_COUNT,
-      level: levelMeta(0),
+      level: publicLevel(0),
       tools: tools ?? [],
       next: HINT,
     },
@@ -137,7 +145,7 @@ export async function handleRangeAct(req: Request, env: Env): Promise<Response> 
       result: res.result,
       tools: res.tools,
       toolsChanged: res.toolsChanged,
-      level: levelMeta(run.level_index),
+      level: publicLevel(run.level_index),
       next: 'Make another tool call, or POST /api/range/complete_level { token } when done with this task.',
     },
     { req },
@@ -175,7 +183,7 @@ export async function handleRangeComplete(req: Request, env: Env): Promise<Respo
       {
         done: false,
         scored: { levelId: meta.id, verdict },
-        level: levelMeta(nextIndex),
+        level: publicLevel(nextIndex),
         tools: tools ?? [],
         next: HINT,
       },
@@ -183,33 +191,32 @@ export async function handleRangeComplete(req: Request, env: Env): Promise<Respo
     );
   }
 
-  // Final level scored: build the scorecard and post it to the same leaderboard.
+  // Final level: atomically claim the finish so a retry or a concurrent request
+  // cannot post the scorecard twice. Only the winner proceeds to insert.
+  const won = await claimFinish(env, token, { results, finished_at: new Date().toISOString() });
+  if (!won) return jsonPublic({ error: 'run_complete' }, { status: 409, req });
+
   const sc = buildScorecard(results as LevelResult[]);
   let scorecardId: string | null = null;
-  try {
-    const inserted = await insertScorecard(env, {
-      agent_label: run.agent_label,
-      corpus_version: run.corpus_version,
-      decided: sc.decided,
-      resisted: sc.resisted,
-      partial: sc.partial,
-      fell: sc.fell,
-      resistance_score: sc.resistanceScore,
-      results,
-    });
-    scorecardId = inserted.id;
-  } catch {
-    scorecardId = null; // scoring still returns; leaderboard post is best-effort
-  }
-  try {
-    await updateRun(env, token, {
-      results,
-      status: 'done',
-      ...(scorecardId ? { scorecard_id: scorecardId } : {}),
-      finished_at: new Date().toISOString(),
-    });
-  } catch {
-    /* the run is scored regardless of the status write */
+  // Only rank a run that actually decided at least one level. A do-nothing run
+  // (all SKIPPED) has nothing to rank, so it never touches the leaderboard.
+  if (sc.decided > 0) {
+    try {
+      const inserted = await insertScorecard(env, {
+        agent_label: run.agent_label,
+        corpus_version: run.corpus_version,
+        decided: sc.decided,
+        resisted: sc.resisted,
+        partial: sc.partial,
+        fell: sc.fell,
+        resistance_score: sc.resistanceScore,
+        results,
+      });
+      scorecardId = inserted.id;
+      await updateRun(env, token, { scorecard_id: scorecardId });
+    } catch {
+      scorecardId = null; // scoring still returns; the leaderboard post is best-effort
+    }
   }
 
   return jsonPublic(
@@ -241,7 +248,7 @@ export async function handleRangeState(req: Request, env: Env): Promise<Response
       status: run.status,
       agent: run.agent_label,
       totalLevels: LEVEL_COUNT,
-      level: run.status === 'running' ? levelMeta(run.level_index) : null,
+      level: run.status === 'running' ? publicLevel(run.level_index) : null,
       results: run.results,
     },
     { req },

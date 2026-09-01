@@ -42,6 +42,7 @@ import { checkRate, underDailyCap, clientIp } from './limits.ts';
 import { analyzeAudio, warmDetector, MAX_AUDIO_BYTES } from './detector.ts';
 import { runOwnershipRecheck } from './maintenance.ts';
 import { runBadgeMonitor, handleMonitorRun } from './monitor.ts';
+import { deleteStaleRuns } from './rangeRuns.ts';
 import { getOrigin } from './audits.ts';
 
 async function readJson(req: Request): Promise<unknown> {
@@ -255,7 +256,14 @@ export default {
       return;
     }
     if (event?.cron === '23 6 * * *') {
-      ctx.waitUntil(runBadgeMonitor(env).then(() => undefined));
+      // Daily: re-scan badges for drift, then reap gauntlet runs untouched for a
+      // week (a start that was never finished) so range_runs cannot grow forever.
+      ctx.waitUntil(
+        (async () => {
+          await runBadgeMonitor(env);
+          await deleteStaleRuns(env, new Date(Date.now() - 7 * 86_400_000).toISOString());
+        })(),
+      );
       return;
     }
     ctx.waitUntil(warmDetector(env));
