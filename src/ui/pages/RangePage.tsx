@@ -187,7 +187,6 @@ export function RangePage() {
             }}
             nativeHost={nativeHost}
           />
-          <Trace bus={session.bus} live={state.status === 'running'} />
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
@@ -197,6 +196,9 @@ export function RangePage() {
             agentLabel={state.agentLabel || agentLabel}
             onDownloadReport={state.status === 'done' ? downloadReport : undefined}
           />
+          {/* The live trace sits right under the scorecard so a run is visible
+              immediately, without scrolling past the (tall) controls panel. */}
+          <Trace bus={session.bus} live={state.status === 'running'} />
           {state.status === 'done' && (
             <LeadCapture agentLabel={state.agentLabel || agentLabel} scorecardId={scorecardId} />
           )}
