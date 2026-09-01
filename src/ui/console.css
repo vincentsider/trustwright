@@ -602,3 +602,33 @@
 .app-foot-inner a:hover {
   color: #fff;
 }
+
+/* ── Attack theater (live attack visualization) ─────────────────────────────── */
+@keyframes tw-callpulse {
+  0% { box-shadow: 0 0 0 0 rgba(34, 211, 238, 0.5); }
+  100% { box-shadow: 0 0 0 12px rgba(34, 211, 238, 0); }
+}
+@keyframes tw-breach {
+  0%, 100% { transform: translateX(0); }
+  15% { transform: translateX(-5px); }
+  30% { transform: translateX(5px); }
+  45% { transform: translateX(-4px); }
+  60% { transform: translateX(4px); }
+  75% { transform: translateX(-2px); }
+}
+@keyframes tw-stamp {
+  0% { transform: scale(1.5) rotate(-4deg); opacity: 0; }
+  55% { transform: scale(0.94) rotate(-4deg); opacity: 1; }
+  100% { transform: scale(1) rotate(-4deg); opacity: 1; }
+}
+@keyframes tw-swapin {
+  0% { opacity: 0; transform: translateY(8px) scale(0.98); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes tw-glow {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 1; }
+}
+.tw-tool-card { animation: tw-swapin 0.28s ease both; }
+.tw-tool-card.called { animation: tw-callpulse 0.9s ease-out; }
+.tw-tool-card.breached { animation: tw-breach 0.5s ease; }

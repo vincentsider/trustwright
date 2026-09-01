@@ -15,6 +15,7 @@ import { buildFullCorpus, CORPUS } from '../../range/corpusLoader.ts';
 import { shouldSaveRun } from '../persist.ts';
 import type { HostSource } from '../../webmcp/types.ts';
 import { Trace } from '../Trace.tsx';
+import { AttackTheater } from '../AttackTheater.tsx';
 import { Scorecard } from '../Scorecard.tsx';
 import { Controls } from '../Controls.tsx';
 import { Leaderboard } from '../Leaderboard.tsx';
@@ -196,8 +197,10 @@ export function RangePage() {
             agentLabel={state.agentLabel || agentLabel}
             onDownloadReport={state.status === 'done' ? downloadReport : undefined}
           />
-          {/* The live trace sits right under the scorecard so a run is visible
-              immediately, without scrolling past the (tall) controls panel. */}
+          {/* The attack visualization is the centerpiece: it sits right under the
+              scorecard so a run is visible immediately. The raw trace follows it
+              as the underlying evidence. */}
+          <AttackTheater bus={session.bus} live={state.status === 'running'} />
           <Trace bus={session.bus} live={state.status === 'running'} />
           {state.status === 'done' && (
             <LeadCapture agentLabel={state.agentLabel || agentLabel} scorecardId={scorecardId} />
