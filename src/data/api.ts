@@ -217,6 +217,9 @@ export interface ScanResult {
   origin: string;
   host: 'native' | 'polyfill' | 'none';
   tools: number;
+  /** The audited tools themselves (name/description/read-vs-act/inputs), for the
+   *  visual breakdown. Absent on older Workers or a host-less/0-tool scan. */
+  toolsDetail?: AuditedTool[];
   fingerprint?: string;
   findings: ScanFinding[];
   assuranceScore?: number;

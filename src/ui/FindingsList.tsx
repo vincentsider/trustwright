@@ -6,7 +6,7 @@
 
 import type { ScanFinding } from '../data/api.ts';
 
-const CHECK_LABEL: Record<string, string> = {
+export const CHECK_LABEL: Record<string, string> = {
   T1: 'Instruction hidden in a tool description',
   T2: 'Returns untrusted content without a warning label',
   T3: 'Tool set changed between reads (cloaking)',

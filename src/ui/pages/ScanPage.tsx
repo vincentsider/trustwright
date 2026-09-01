@@ -1,13 +1,15 @@
 // src/ui/pages/ScanPage.tsx
 //
 // Mode 2, consumer side: paste any URL and get an UNSIGNED preview of its WebMCP
-// tool surface + red flags. This is the "an agent (or you) checks a site" path —
-// no ownership needed, because it makes no claim on the site's behalf.
+// tool surface. Built for two readers at once: a non-technical person who just
+// wants to know "is this safe for my agent?", answered in plain language up top;
+// and a developer or agent who wants the exact tools, findings and fingerprint,
+// kept in full below. No ownership needed — a scan makes no claim on the site.
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { scanUrl, type ScanResult } from '../../data/api.ts';
-import { FindingsList } from '../FindingsList.tsx';
+import { scanUrl, type ScanResult, type AuditedTool, type ScanFinding } from '../../data/api.ts';
+import { FindingsList, CHECK_LABEL } from '../FindingsList.tsx';
 
 // Keys MUST match the exact error strings the Worker returns (worker/scan.ts,
 // worker/browserScan.ts). An unmapped key falls through to the raw string.
@@ -23,12 +25,177 @@ const ERR: Record<string, string> = {
   'invalid url': 'That does not look like a valid web address (include https://).',
 };
 
+const STEPS = ['Opening the page in a real browser', 'Reading the tools it offers agents', 'Checking each tool for red flags'];
+
+function hostOf(origin: string): string {
+  try {
+    return new URL(origin).host;
+  } catch {
+    return origin;
+  }
+}
+
+type Tone = 'ok' | 'warn' | 'bad';
+
+interface Verdict {
+  tone: Tone;
+  icon: string;
+  headline: string;
+  summary: string;
+  meaning: string;
+}
+
+export function verdictOf(result: ScanResult): Verdict {
+  const tools = result.toolsDetail ?? [];
+  const readOnly = tools.filter((t) => t.readOnly).length;
+  const canAct = tools.length - readOnly;
+  const flagged = result.findings.filter((f) => f.verdict !== 'PASS');
+  const failed = flagged.some((f) => f.verdict === 'FAIL');
+  const tone: Tone = failed ? 'bad' : flagged.length > 0 ? 'warn' : 'ok';
+
+  const site = hostOf(result.origin);
+  const toolWord = result.tools === 1 ? 'tool' : 'tools';
+  const parts = [`${site} offers your agent ${result.tools} ${toolWord}.`];
+  if (tools.length) {
+    if (canAct === 0) parts.push('All of them only read data; none can change anything.');
+    else if (readOnly === 0) parts.push(`${canAct === 1 ? 'It can take an action' : 'They can take actions'}, not just read.`);
+    else parts.push(`${readOnly} only read data, ${canAct} can take an action.`);
+  }
+  parts.push(flagged.length === 0 ? 'We found no red flags.' : `We flagged ${flagged.length} of them for a closer look.`);
+
+  return {
+    tone,
+    icon: tone === 'bad' ? '⛔' : tone === 'warn' ? '⚠️' : '🛡️',
+    headline: tone === 'bad' ? 'Be careful with this site' : tone === 'warn' ? 'Mostly fine, with a couple of things to check' : 'Looks safe for your agent',
+    summary: parts.join(' '),
+    meaning:
+      tone === 'bad'
+        ? 'An agent could be manipulated here. Review the red flags below before letting your agent act on this site.'
+        : tone === 'warn'
+          ? 'An agent can use this site, but should treat the flagged tools with extra care.'
+          : 'An agent can use these tools with normal caution.',
+  };
+}
+
+const TONE_COLOR: Record<Tone, string> = { ok: 'var(--ok)', warn: 'var(--warn)', bad: 'var(--danger)' };
+const TONE_SOFT: Record<Tone, string> = { ok: 'var(--ok-soft)', warn: 'var(--warn-soft)', bad: 'var(--danger-soft)' };
+
+function ScoreRing({ score, tone }: { score: number; tone: Tone }) {
+  const r = 30;
+  const c = 2 * Math.PI * r;
+  const pct = Math.max(0, Math.min(1, score));
+  return (
+    <svg width="76" height="76" viewBox="0 0 76 76" style={{ flexShrink: 0 }} aria-hidden>
+      <circle cx="38" cy="38" r={r} fill="none" stroke="var(--hair-2)" strokeWidth="7" />
+      <circle
+        cx="38"
+        cy="38"
+        r={r}
+        fill="none"
+        stroke={TONE_COLOR[tone]}
+        strokeWidth="7"
+        strokeLinecap="round"
+        strokeDasharray={c}
+        strokeDashoffset={c * (1 - pct)}
+        transform="rotate(-90 38 38)"
+        style={{ transition: 'stroke-dashoffset .8s ease' }}
+      />
+      <text x="38" y="42" textAnchor="middle" fontSize="17" fontWeight="800" fill="var(--ink)" fontFamily="var(--mono)">
+        {Math.round(pct * 100)}
+      </text>
+    </svg>
+  );
+}
+
+function ToolCard({ tool, findings }: { tool: AuditedTool; findings: ScanFinding[] }) {
+  const flags = findings.filter((f) => f.toolName === tool.name && f.verdict !== 'PASS');
+  const worst = flags.some((f) => f.verdict === 'FAIL') ? 'bad' : flags.length > 0 ? 'warn' : 'ok';
+  const border = worst === 'bad' ? 'var(--danger)' : worst === 'warn' ? 'var(--warn)' : 'var(--hair-2)';
+
+  return (
+    <div style={{ border: `1px solid ${border}`, borderRadius: 10, padding: '13px 14px', background: 'var(--surface-2)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
+        <span className="mono" style={{ fontSize: 13, fontWeight: 700, color: 'var(--ink)', wordBreak: 'break-all' }}>
+          {tool.name}
+        </span>
+        <span style={{ display: 'inline-flex', gap: 6 }}>
+          <Tag label={tool.readOnly ? 'reads data' : 'can act'} color={tool.readOnly ? 'var(--ok)' : 'var(--warn)'} />
+          {tool.untrusted && <Tag label="untrusted output" color="var(--red-team)" />}
+        </span>
+      </div>
+
+      {tool.description && (
+        <p style={{ margin: '9px 0 0', fontSize: 12.5, color: 'var(--ink-2)', lineHeight: 1.5 }}>{tool.description}</p>
+      )}
+
+      <p style={{ margin: '9px 0 0', fontSize: 12, color: 'var(--ink-3)', lineHeight: 1.5 }}>
+        {tool.readOnly
+          ? 'An agent can look this up without changing anything.'
+          : 'An agent can use this to take an action, so it should do so deliberately.'}
+      </p>
+
+      {(tool.params?.length ?? 0) > 0 && (
+        <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginTop: 10 }}>
+          <span className="mono" style={{ fontSize: 10.5, color: 'var(--ink-3)' }}>inputs:</span>
+          {(tool.params ?? []).slice(0, 12).map((p) => (
+            <span key={p} className="mono" style={{ fontSize: 10.5, color: 'var(--ink-2)', background: 'var(--bg)', border: '1px solid var(--hair-2)', borderRadius: 6, padding: '1px 6px' }}>
+              {p}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {flags.map((f, i) => (
+        <p
+          key={`${f.check}-${i}`}
+          style={{
+            margin: '10px 0 0',
+            fontSize: 12,
+            lineHeight: 1.5,
+            color: worst === 'bad' ? 'var(--danger)' : 'var(--warn)',
+            background: TONE_SOFT[worst as Tone],
+            border: `1px solid ${border}`,
+            borderRadius: 8,
+            padding: '7px 10px',
+          }}
+        >
+          <b>{f.verdict === 'FAIL' ? '⚠ Red flag: ' : 'Worth a look: '}</b>
+          {CHECK_LABEL[f.check] ?? f.check}
+          {f.evidence ? ` — ${f.evidence}` : ''}
+        </p>
+      ))}
+    </div>
+  );
+}
+
+function Tag({ label, color }: { label: string; color: string }) {
+  return (
+    <span
+      className="mono"
+      style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '.04em', color, border: `1px solid ${color}`, opacity: 0.9, borderRadius: 999, padding: '1px 8px' }}
+    >
+      {label}
+    </span>
+  );
+}
+
 export function ScanPage() {
   const [params] = useSearchParams();
   const [url, setUrl] = useState(params.get('url') ?? '');
   const [busy, setBusy] = useState(false);
+  const [step, setStep] = useState(0);
   const [result, setResult] = useState<ScanResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [showTech, setShowTech] = useState(false);
+
+  // Advance the loading steps so "opening a browser" feels real. Caps at the last
+  // step until the scan actually returns.
+  useEffect(() => {
+    if (!busy) return;
+    setStep(0);
+    const id = setInterval(() => setStep((s) => Math.min(s + 1, STEPS.length - 1)), 1400);
+    return () => clearInterval(id);
+  }, [busy]);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -37,6 +204,7 @@ export function ScanPage() {
     setBusy(true);
     setError(null);
     setResult(null);
+    setShowTech(false);
     const withScheme = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
     const { ok, data } = await scanUrl(withScheme);
     setBusy(false);
@@ -51,10 +219,10 @@ export function ScanPage() {
     <div className="page console page-narrow">
       <div className="cx-head">
         <p className="cx-kick">Mode 2 · scan a site</p>
-        <h1 className="cx-title">Scan any site&apos;s agent tools.</h1>
+        <h1 className="cx-title">Is this site safe for your agent?</h1>
         <p className="cx-sub">
-          Paste a web address. Trustwright opens it in a real browser, reads the tools it hands to AI agents, and shows
-          you what they really say. A look, not a certificate. A signed badge needs the owner (
+          Paste a web address. Trustwright opens it in a real browser, reads the tools it hands to AI agents, and tells
+          you in plain language what they can do. A look, not a certificate. A signed badge needs the owner (
           <Link to="/badge">get a badge</Link>).
         </p>
       </div>
@@ -87,9 +255,19 @@ export function ScanPage() {
       </p>
 
       {busy && (
-        <div className="notice" style={{ marginTop: 18 }}>
-          <span className="spin" style={{ marginRight: 8, verticalAlign: 'middle' }} />
-          Opening the page in a browser and reading its tools. This can take a few seconds.
+        <div className="card" style={{ marginTop: 18 }}>
+          {STEPS.map((label, i) => (
+            <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 2px', opacity: i <= step ? 1 : 0.4 }}>
+              {i < step ? (
+                <span style={{ color: 'var(--ok)', fontWeight: 700 }}>✓</span>
+              ) : i === step ? (
+                <span className="spin" style={{ width: 14, height: 14 }} />
+              ) : (
+                <span style={{ width: 14, height: 14, borderRadius: 999, border: '1px solid var(--hair-2)', display: 'inline-block' }} />
+              )}
+              <span style={{ fontSize: 13.5, color: i <= step ? 'var(--ink)' : 'var(--ink-3)' }}>{label}</span>
+            </div>
+          ))}
         </div>
       )}
 
@@ -100,42 +278,124 @@ export function ScanPage() {
       )}
 
       {result && !busy && (
-        <div className="card" style={{ marginTop: 24 }}>
-          {result.host === 'none' ? (
-            <div className="scan-verdict warn">
-              <p className="sv-line">No agent tools found.</p>
-              <p className="sv-sub">{result.origin} · nothing an outside visitor can read</p>
-              <p className="muted" style={{ margin: '16px auto 0', maxWidth: '52ch', fontSize: 14.5 }}>
-                Some sites only expose their tools inside a native agent host (ChatGPT&apos;s browser, flagged
-                Chrome), where an external scan cannot see them.
-              </p>
+        <div style={{ marginTop: 24, display: 'flex', flexDirection: 'column', gap: 18 }}>
+          {result.host === 'none' || result.tools === 0 ? (
+            <div className="card">
+              <div className="scan-verdict warn">
+                <p className="sv-line">No agent tools found.</p>
+                <p className="sv-sub">{hostOf(result.origin)} · nothing an outside visitor can read</p>
+                <p className="muted" style={{ margin: '16px auto 0', maxWidth: '52ch', fontSize: 14.5 }}>
+                  Either this site hands no tools to AI agents, or it only exposes them inside a native agent host
+                  (ChatGPT&apos;s browser, flagged Chrome), where an external scan cannot see them. Nothing to worry
+                  about either way.
+                </p>
+              </div>
             </div>
           ) : (
-            (() => {
-              const flagged = result.findings.filter((f) => f.verdict !== 'PASS').length;
-              const failed = result.findings.some((f) => f.verdict === 'FAIL');
-              const tone = failed ? 'bad' : flagged > 0 ? 'warn' : 'ok';
-              return (
-                <div>
-                  <div className={`scan-verdict ${tone}`}>
-                    <p className="sv-line">
-                      {flagged === 0
-                        ? 'No red flags.'
-                        : `${flagged} thing${flagged === 1 ? '' : 's'} worth a look.`}
-                    </p>
-                    <p className="sv-sub">
-                      {result.origin} · {result.tools} tool{result.tools === 1 ? '' : 's'} read · host {result.host}
-                    </p>
-                  </div>
-                  <FindingsList findings={result.findings} />
-                  {result.fingerprint && <p className="fp-row">fingerprint {result.fingerprint}</p>}
-                  <p className="notice" style={{ marginTop: 16, fontSize: 12.5 }}>{result.note}</p>
-                </div>
-              );
-            })()
+            <ScanResultView result={result} showTech={showTech} onToggleTech={() => setShowTech((v) => !v)} />
           )}
         </div>
       )}
     </div>
+  );
+}
+
+function ScanResultView({ result, showTech, onToggleTech }: { result: ScanResult; showTech: boolean; onToggleTech: () => void }) {
+  const v = verdictOf(result);
+  const tools = result.toolsDetail ?? [];
+
+  return (
+    <>
+      {/* Plain-language verdict */}
+      <div className="card" style={{ borderColor: TONE_COLOR[v.tone] }}>
+        <div style={{ display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: 76,
+              height: 76,
+              borderRadius: 16,
+              background: TONE_SOFT[v.tone],
+              fontSize: 34,
+              flexShrink: 0,
+            }}
+          >
+            {v.icon}
+          </div>
+          <div style={{ flex: '1 1 260px' }}>
+            <div style={{ fontSize: 19, fontWeight: 750, color: TONE_COLOR[v.tone] }}>{v.headline}</div>
+            <p style={{ margin: '6px 0 0', fontSize: 14, color: 'var(--ink)', lineHeight: 1.5 }}>{v.summary}</p>
+          </div>
+          {result.assuranceScore != null && (
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+              <ScoreRing score={result.assuranceScore} tone={v.tone} />
+              <span className="mono" style={{ fontSize: 10.5, color: 'var(--ink-3)' }}>% clean</span>
+            </div>
+          )}
+        </div>
+        <p style={{ margin: '14px 0 0', fontSize: 13, color: 'var(--ink-2)', lineHeight: 1.5, borderTop: '1px solid var(--hair)', paddingTop: 12 }}>
+          <b>What this means: </b>
+          {v.meaning}
+        </p>
+      </div>
+
+      {/* The tools, visualized */}
+      {tools.length > 0 && (
+        <div className="card">
+          <div className="card-head">
+            <span className="card-title">What an agent can do here</span>
+            <span className="mono" style={{ fontSize: 11, color: 'var(--ink-3)' }}>
+              {tools.length} tool{tools.length === 1 ? '' : 's'}
+            </span>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 12, marginTop: 4 }}>
+            {tools.map((t) => (
+              <ToolCard key={t.name} tool={t} findings={result.findings} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Technical details, for developers and agents */}
+      <div className="card">
+        <div
+          className="card-head"
+          style={{ cursor: 'pointer', marginBottom: showTech ? undefined : 0 }}
+          role="button"
+          tabIndex={0}
+          onClick={onToggleTech}
+          onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && onToggleTech()}
+        >
+          <span className="card-title">Technical details</span>
+          <span className="mono" style={{ fontSize: 11, color: 'var(--signal-bright)' }}>{showTech ? 'hide' : 'for developers and agents'}</span>
+        </div>
+        {showTech && (
+          <div style={{ marginTop: 6 }}>
+            <FindingsList findings={result.findings} />
+            <div className="rep-row" style={{ marginTop: 14 }}>
+              <span className="rep-k">Host</span>
+              <span className="rep-v mono">{result.host}</span>
+            </div>
+            {result.fingerprint && (
+              <div className="rep-row">
+                <span className="rep-k">Fingerprint</span>
+                <span className="rep-v mono" style={{ wordBreak: 'break-all' }}>{result.fingerprint}</span>
+              </div>
+            )}
+            <div className="rep-row">
+              <span className="rep-k">Signed</span>
+              <span className="rep-v mono">no (a scan is an unsigned preview)</span>
+            </div>
+            <div className="rep-row">
+              <span className="rep-k">Scanned</span>
+              <span className="rep-v mono">{new Date(result.scannedAt).toLocaleString()}</span>
+            </div>
+            <p className="notice" style={{ marginTop: 14, fontSize: 12.5 }}>{result.note}</p>
+          </div>
+        )}
+      </div>
+    </>
   );
 }
