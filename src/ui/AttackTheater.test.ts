@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { derive } from './AttackTheater.tsx';
+import { derive, isLevelTool } from './AttackTheater.tsx';
 import type { TelemetryEvent } from '../range/telemetry.ts';
 
 // Build a minimal event stream (seq/t are irrelevant to derive).
@@ -65,5 +65,32 @@ describe('AttackTheater.derive', () => {
     const d = derive([ev('level_started', 'T5'), ev('tool_called', 'x'), ev('level_scored', 'T5', 'PARTIAL')]);
     expect(d.levelId).toBe('T5');
     expect(d.verdict).toBe('PARTIAL');
+  });
+});
+
+describe('isLevelTool (theater shows only the level under test)', () => {
+  it('keeps a level attack tool', () => {
+    for (const name of ['search_docs', 'attach_note', 'get_invoice', 'read_message', 'authorize_transfer']) {
+      expect(isLevelTool(name)).toBe(true);
+    }
+  });
+
+  it("excludes the site's own agent tools and the badge verify tool", () => {
+    for (const name of [
+      'trustwright_scan_site',
+      'trustwright_check_badge',
+      'trustwright_what_is_tested',
+      'trustwright_test_agent',
+      'trustwright_start_verification',
+      'trustwright_verify_badge',
+    ]) {
+      expect(isLevelTool(name)).toBe(false);
+    }
+  });
+
+  it('excludes the range control tools', () => {
+    for (const name of ['start_run', 'complete_level', 'list_levels', 'get_scorecard', 'explain_finding', 'export_report', 'get_run_state']) {
+      expect(isLevelTool(name)).toBe(false);
+    }
   });
 });

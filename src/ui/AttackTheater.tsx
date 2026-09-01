@@ -30,6 +30,26 @@ interface Derived {
   history: Array<{ levelId: string; verdict: string }>;
 }
 
+// The live host carries far more than the level under test: Trustwright's own
+// agent tools (trustwright_*), the range control tools, and the badge verify
+// tool are all registered too. The theater must show ONLY the tools the current
+// LEVEL armed, or it becomes a wall of irrelevant cards. These are the persistent
+// non-level tools to exclude (control tools are named in controlTools.ts; every
+// trustwright_* tool is the site's own or the badge's).
+const CONTROL_TOOLS: ReadonlySet<string> = new Set([
+  'list_levels',
+  'start_run',
+  'complete_level',
+  'get_run_state',
+  'get_scorecard',
+  'explain_finding',
+  'export_report',
+]);
+
+export function isLevelTool(name: string): boolean {
+  return !name.startsWith('trustwright_') && !CONTROL_TOOLS.has(name);
+}
+
 /** Fold the event stream into the current level's visual state. Recomputed on
  *  every emit; the bus is bounded so this is cheap, and it resets to idle for
  *  free when the bus is cleared between runs. Exported for unit testing. */
@@ -121,6 +141,9 @@ export function AttackTheater({
   const d = derive(snap);
   const level = d.levelId ? levelById(d.levelId, corpus) : null;
   const idle = !d.levelId;
+  // Only the tools THIS level put on the surface — never the site's own agent
+  // tools, the range control tools, or the badge verify tool.
+  const levelTools = surface.order.filter((t) => isLevelTool(t.name));
 
   return (
     <section className="card" style={{ padding: 0, overflow: 'hidden' }}>
@@ -166,12 +189,12 @@ export function AttackTheater({
             )}
 
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginTop: 16 }}>
-              {surface.order.length === 0 && (
+              {levelTools.length === 0 && (
                 <div className="mono" style={{ fontSize: 12, color: 'var(--ink-3)' }}>
                   waiting for the tool surface…
                 </div>
               )}
-              {surface.order.map((t) => (
+              {levelTools.map((t) => (
                 <ToolCard
                   key={t.name}
                   tool={t}
