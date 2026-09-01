@@ -33,12 +33,7 @@ import { validateTools } from './badge.ts';
 import { fingerprintSurface, toolFingerprints } from '../src/range/fingerprint.ts';
 import { sendBadgeAlertEmail, isAlertConfigured } from './email.ts';
 
-function timingSafeEqual(a: string, b: string): boolean {
-  if (a.length !== b.length) return false;
-  let diff = 0;
-  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
-  return diff === 0;
-}
+import { constantTimeEqual } from './crypto.ts';
 
 const DEFAULT_BATCH = 50;
 const DEFAULT_WARN_DAYS = 7;
@@ -269,7 +264,7 @@ export async function runBadgeMonitor(env: Env, nowMs: number = Date.now()): Pro
  */
 export async function handleMonitorRun(req: Request, env: Env): Promise<Response> {
   const provided = req.headers.get('x-admin-token') ?? '';
-  if (!env.ADMIN_TOKEN || !timingSafeEqual(provided, env.ADMIN_TOKEN)) {
+  if (!env.ADMIN_TOKEN || !constantTimeEqual(provided, env.ADMIN_TOKEN)) {
     return jsonPublic({ error: 'forbidden' }, { status: 403, req });
   }
   if (!(await checkRate(env, `${clientIp(req)}:monitor`))) {

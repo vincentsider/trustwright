@@ -50,3 +50,21 @@ export async function signEd25519(env: Env, message: string): Promise<string> {
 export function keyId(env: Env): string {
   return env.TRUSTWRIGHT_KEY_ID || 'k1';
 }
+
+/**
+ * Length-safe comparison for secrets (admin/stats tokens). Unlike a naive
+ * `a.length !== b.length` early return, it folds the length difference into the
+ * accumulator, so timing does not reveal the SECRET's length (only the caller's
+ * own input length, which they already know). The single shared implementation
+ * replaces four hand-rolled copies that each leaked length. JS strings are not
+ * perfectly constant-time, so this is defence in depth over already
+ * high-entropy, fixed-length tokens.
+ */
+export function constantTimeEqual(provided: string, secret: string): boolean {
+  const m = secret.length;
+  let diff = provided.length ^ m;
+  for (let i = 0; i < provided.length; i++) {
+    diff |= provided.charCodeAt(i) ^ (m > 0 ? secret.charCodeAt(i % m) : 0);
+  }
+  return diff === 0;
+}

@@ -19,7 +19,7 @@ import {
   getLatestManifest,
 } from './audits.ts';
 import { newChallengeToken, normalizeOrigin, checkOriginControl } from './originVerify.ts';
-import { signEd25519, keyId, isSigningConfigured } from './crypto.ts';
+import { signEd25519, keyId, isSigningConfigured, constantTimeEqual } from './crypto.ts';
 import { analyzeSurface } from '../src/range/mode2.ts';
 import { fingerprintSurface, stableStringify, FINGERPRINT_ALGO } from '../src/range/fingerprint.ts';
 import { buildSurfaceReport, sealSurfaceReport, scopeStatement } from '../src/range/surfaceReport.ts';
@@ -37,13 +37,6 @@ import type { RegisteredTool } from '../src/webmcp/types.ts';
 
 const MAX_TOOLS = 300;
 const MAX_BODY_BYTES = 512 * 1024;
-
-function timingSafeEqual(a: string, b: string): boolean {
-  if (a.length !== b.length) return false;
-  let diff = 0;
-  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
-  return diff === 0;
-}
 
 /** Validate a self-reported tool surface into RegisteredTools, or null. */
 export function validateTools(v: unknown): RegisteredTool[] | null {
@@ -391,7 +384,7 @@ export function handlePubkey(req: Request, env: Env): Response {
 /** POST /api/audit/revoke { origin | id } -> admin-gated revocation. */
 export async function handleRevoke(req: Request, env: Env): Promise<Response> {
   const provided = req.headers.get('x-admin-token') ?? '';
-  if (!env.ADMIN_TOKEN || !timingSafeEqual(provided, env.ADMIN_TOKEN)) {
+  if (!env.ADMIN_TOKEN || !constantTimeEqual(provided, env.ADMIN_TOKEN)) {
     return jsonPublic({ error: 'forbidden' }, { status: 403, req });
   }
   const body = await readJson(req);

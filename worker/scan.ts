@@ -25,7 +25,7 @@ import { jsonPublic } from './http.ts';
 import { checkRate, underDailyCap, clientIp } from './limits.ts';
 import { validateTools } from './badge.ts';
 import { getOrigin, insertAudit, supersedePriorAudits, logScanEvent, getStats } from './audits.ts';
-import { signEd25519, keyId, isSigningConfigured } from './crypto.ts';
+import { signEd25519, keyId, isSigningConfigured, constantTimeEqual } from './crypto.ts';
 import { scanWithBrowser } from './browserScan.ts';
 import { isBlockedHostname } from './netguard.ts';
 import { analyzeSurface } from '../src/range/mode2.ts';
@@ -63,13 +63,6 @@ export function toAuditedTools(tools: RegisteredTool[]): AuditedTool[] {
         params: props && typeof props === 'object' ? Object.keys(props as Record<string, unknown>).slice(0, 40) : [],
       };
     });
-}
-
-function timingSafeEqual(a: string, b: string): boolean {
-  if (a.length !== b.length) return false;
-  let diff = 0;
-  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
-  return diff === 0;
 }
 
 /** Validate a scan target into { url, origin }, or null. http(s) only. */
@@ -255,8 +248,8 @@ export async function handleStats(req: Request, env: Env): Promise<Response> {
   // operator. A stolen dashboard token can therefore only READ counts.
   const provided = req.headers.get('x-admin-token') ?? '';
   const ok =
-    (!!env.STATS_TOKEN && timingSafeEqual(provided, env.STATS_TOKEN)) ||
-    (!!env.ADMIN_TOKEN && timingSafeEqual(provided, env.ADMIN_TOKEN));
+    (!!env.STATS_TOKEN && constantTimeEqual(provided, env.STATS_TOKEN)) ||
+    (!!env.ADMIN_TOKEN && constantTimeEqual(provided, env.ADMIN_TOKEN));
   if (!ok) return jsonPublic({ error: 'forbidden' }, { status: 403, req });
   try {
     return jsonPublic(await getStats(env), { req });
@@ -268,7 +261,7 @@ export async function handleStats(req: Request, env: Env): Promise<Response> {
 /** POST /api/audit/from-scan { url } -> admin-gated variant for Trustwright operators. */
 export async function handleAuditFromScan(req: Request, env: Env): Promise<Response> {
   const provided = req.headers.get('x-admin-token') ?? '';
-  if (!env.ADMIN_TOKEN || !timingSafeEqual(provided, env.ADMIN_TOKEN)) {
+  if (!env.ADMIN_TOKEN || !constantTimeEqual(provided, env.ADMIN_TOKEN)) {
     return jsonPublic({ error: 'forbidden' }, { status: 403, req });
   }
   if (!isSigningConfigured(env)) return jsonPublic({ error: 'signing_unavailable' }, { status: 503, req });

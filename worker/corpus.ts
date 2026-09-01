@@ -17,14 +17,7 @@ import { jsonPublic } from './http.ts';
 import { checkRate, clientIp } from './limits.ts';
 import { getCorpusTier, insertCorpusEntitlement } from './audits.ts';
 import { PREMIUM_SPECS } from './premiumCorpus.ts';
-import { bytesToBase64 } from './crypto.ts';
-
-function timingSafeEqual(a: string, b: string): boolean {
-  if (a.length !== b.length) return false;
-  let diff = 0;
-  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
-  return diff === 0;
-}
+import { bytesToBase64, constantTimeEqual } from './crypto.ts';
 
 function newCorpusToken(): string {
   const bytes = new Uint8Array(24);
@@ -58,7 +51,7 @@ export async function handleGetCorpus(req: Request, env: Env): Promise<Response>
 /** POST /api/corpus/grant { label?, days? } (admin) -> a new entitlement token. */
 export async function handleGrantCorpus(req: Request, env: Env): Promise<Response> {
   const provided = req.headers.get('x-admin-token') ?? '';
-  if (!env.ADMIN_TOKEN || !timingSafeEqual(provided, env.ADMIN_TOKEN)) {
+  if (!env.ADMIN_TOKEN || !constantTimeEqual(provided, env.ADMIN_TOKEN)) {
     return jsonPublic({ error: 'forbidden' }, { status: 403, req });
   }
   const body = (await req.json().catch(() => ({}))) as { label?: unknown; days?: unknown };
