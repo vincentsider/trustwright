@@ -22,6 +22,7 @@ import { Controls } from '../Controls.tsx';
 import { Leaderboard } from '../Leaderboard.tsx';
 import { LeadCapture } from '../LeadCapture.tsx';
 import { BringYourOwnAttack } from '../BringYourOwnAttack.tsx';
+import { AgentRisk } from '../AgentRisk.tsx';
 
 const HOST_LABEL: Record<HostSource, string> = {
   document: 'native · document.modelContext',
@@ -227,6 +228,9 @@ export function RangePage() {
             agentLabel={state.agentLabel || agentLabel}
             onDownloadReport={state.status === 'done' ? downloadReport : undefined}
           />
+          {/* Plain-language consequences of how the agent did (self-hides until a
+              level has a verdict). */}
+          <AgentRisk results={scorecard.results} corpus={corpusLevels} />
           {/* The attack visualization is the centerpiece: it sits right under the
               scorecard so a run is visible immediately. The raw trace follows it
               as the underlying evidence. */}
