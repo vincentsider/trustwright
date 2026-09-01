@@ -17,9 +17,11 @@ import T3 from './corpus/public/T3.json';
 import T5 from './corpus/public/T5.json';
 import T6 from './corpus/public/T6.json';
 import T7 from './corpus/public/T7.json';
+import T8 from './corpus/public/T8.json';
+import T9 from './corpus/public/T9.json';
 
 /** The bundled, open, ordered public corpus (as raw specs). */
-export const PUBLIC_SPECS: readonly unknown[] = [T1, T2, T3, T5, T6, T7];
+export const PUBLIC_SPECS: readonly unknown[] = [T1, T2, T3, T5, T6, T7, T8, T9];
 
 /** Validate + build a list of specs into runnable levels, dropping invalid ones. */
 export function buildCorpus(specs: readonly unknown[]): LevelDefinition[] {
