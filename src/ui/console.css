@@ -672,3 +672,17 @@
     align-items: start;
   }
 }
+
+/* Scan result: the plain-language verdict and the "worst case" share a balanced
+   top row (the whole answer at a glance), tools + technical run full width below. */
+.scan-result-top {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 18px;
+}
+@media (min-width: 860px) {
+  .scan-result-top {
+    grid-template-columns: 1.35fr 1fr;
+    align-items: start;
+  }
+}

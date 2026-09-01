@@ -304,13 +304,14 @@ export function ScanPage() {
   };
 
   return (
-    <div className="page console page-narrow">
-      <div className="cx-head">
-        <p className="cx-kick">Mode 2 · scan a site</p>
-        <h1 className="cx-title">Is this site safe for your agent?</h1>
-        <p className="cx-sub">
-          Paste a web address. Trustwright opens it in a real browser, reads the tools it hands to AI agents, and tells
-          you in plain language what they can do. A look, not a certificate. A signed badge needs the owner (
+    <div className="page console">
+      <div style={{ maxWidth: 720, margin: '0 auto' }}>
+      <div className="cx-head" style={{ marginBottom: 8 }}>
+        <p className="cx-kick" style={{ marginBottom: 2 }}>Mode 2 · scan a site</p>
+        <h1 className="cx-title" style={{ margin: 0 }}>Is this site safe for your agent?</h1>
+        <p className="cx-sub" style={{ marginTop: 6 }}>
+          Paste a web address. Trustwright opens it in a real browser, reads the tools a site hands to AI agents, and
+          tells you in plain language what they can do (a signed badge needs the owner:{' '}
           <Link to="/badge">get a badge</Link>).
         </p>
       </div>
@@ -364,6 +365,7 @@ export function ScanPage() {
           {error}
         </div>
       )}
+      </div>
 
       {result && !busy && (
         <div style={{ marginTop: 24, display: 'flex', flexDirection: 'column', gap: 18 }}>
@@ -394,8 +396,10 @@ function ScanResultView({ result, showTech, onToggleTech }: { result: ScanResult
 
   return (
     <>
+      {/* Verdict + worst case: the whole answer, one balanced row above the tools. */}
+      <div className="scan-result-top">
       {/* Plain-language verdict */}
-      <div className="card" style={{ borderColor: TONE_COLOR[v.tone] }}>
+      <div className="card" style={{ borderColor: TONE_COLOR[v.tone], marginTop: 0 }}>
         <div style={{ display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
           <div
             style={{
@@ -431,6 +435,7 @@ function ScanResultView({ result, showTech, onToggleTech }: { result: ScanResult
 
       {/* What's the worst that could happen */}
       <WorstCase result={result} />
+      </div>
 
       {/* The tools, visualized */}
       {tools.length > 0 && (
