@@ -188,34 +188,37 @@ export function RangePage() {
 
   return (
     <div className="page console">
-      <header className="cx-head">
-        <p className="cx-kick">Mode 1 · test an agent</p>
-        <h1 className="cx-title">Put your agent on the range.</h1>
-        <p className="cx-sub">
-          Run it through a corpus of real tool-surface attacks and watch, live, what gets through. Every payload is an
-          inert marker, never a real exploit.
-        </p>
-        <p style={{ marginTop: 18 }}>
-          <span
-            className="pill"
-            style={{
-              background: isWebMcpAvailable() ? 'rgba(34,211,238,.14)' : 'rgba(251,91,118,.16)',
-              color: isWebMcpAvailable() ? '#67e8f9' : '#ffb3ba',
-              border: '1px solid ' + (isWebMcpAvailable() ? 'rgba(34,211,238,.3)' : 'rgba(251,91,118,.32)'),
-            }}
-          >
-            <span className="dot" style={{ background: 'currentColor' }} />
-            {HOST_LABEL[source]}
-          </span>
-          {premiumCount > 0 && (
+      <header className="cx-head" style={{ marginBottom: 4 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
+          <div>
+            <p className="cx-kick" style={{ marginBottom: 2 }}>Mode 1 · test an agent</p>
+            <h1 className="cx-title" style={{ margin: 0 }}>Put your agent on the range.</h1>
+          </div>
+          <span style={{ display: 'inline-flex', gap: 8, flexShrink: 0 }}>
             <span
               className="pill"
-              style={{ marginLeft: 8, background: 'rgba(34,211,238,.14)', color: '#67e8f9', border: '1px solid rgba(34,211,238,.3)' }}
+              style={{
+                background: isWebMcpAvailable() ? 'rgba(34,211,238,.14)' : 'rgba(251,91,118,.16)',
+                color: isWebMcpAvailable() ? '#67e8f9' : '#ffb3ba',
+                border: '1px solid ' + (isWebMcpAvailable() ? 'rgba(34,211,238,.3)' : 'rgba(251,91,118,.32)'),
+              }}
             >
               <span className="dot" style={{ background: 'currentColor' }} />
-              +{premiumCount} extra {premiumCount === 1 ? 'level' : 'levels'}
+              {HOST_LABEL[source]}
             </span>
-          )}
+            {premiumCount > 0 && (
+              <span
+                className="pill"
+                style={{ background: 'rgba(34,211,238,.14)', color: '#67e8f9', border: '1px solid rgba(34,211,238,.3)' }}
+              >
+                <span className="dot" style={{ background: 'currentColor' }} />
+                +{premiumCount} extra {premiumCount === 1 ? 'level' : 'levels'}
+              </span>
+            )}
+          </span>
+        </div>
+        <p className="cx-sub" style={{ marginTop: 6, marginBottom: 0 }}>
+          Run it through a corpus of real tool-surface attacks and watch, live, what gets through.
         </p>
       </header>
 
@@ -272,27 +275,31 @@ export function RangePage() {
         )}
       </section>
 
-      {/* The live dashboard: the Attack Theater is the hero (wide column); the
-          rail carries the plain-language consequence, the bounded trace, the
-          scorecard detail, the leaderboard, and the report CTA target. */}
+      {/* The live pair: the Attack Theater (hero) and the raw trace side by side.
+          They are of similar height, so neither column leaves a void. */}
       <div className="grid-main" style={{ marginTop: 18 }}>
         <AttackTheater bus={session.bus} live={state.status === 'running'} corpus={corpusLevels} />
+        <Trace bus={session.bus} live={state.status === 'running'} />
+      </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-          <AgentRisk results={scorecard.results} corpus={corpusLevels} />
-          <Trace bus={session.bus} live={state.status === 'running'} />
-          <Scorecard
-            scorecard={scorecard}
-            agentLabel={state.agentLabel || agentLabel}
-            onDownloadReport={state.status === 'done' ? downloadReport : undefined}
-          />
-          <Leaderboard refreshKey={leaderboardKey} />
-          <div id="range-report">
-            {state.status === 'done' && (
-              <LeadCapture agentLabel={state.agentLabel || agentLabel} scorecardId={scorecardId} />
-            )}
-          </div>
-        </div>
+      {/* Summary row: the plain-language consequence, the scorecard detail, and
+          the leaderboard — compact cards that reflow, never a tall narrow rail. */}
+      <div className="range-summary" style={{ marginTop: 18 }}>
+        <AgentRisk results={scorecard.results} corpus={corpusLevels} />
+        <Scorecard
+          scorecard={scorecard}
+          agentLabel={state.agentLabel || agentLabel}
+          onDownloadReport={state.status === 'done' ? downloadReport : undefined}
+        />
+        <Leaderboard refreshKey={leaderboardKey} />
+      </div>
+
+      {/* The report / lead capture, appearing once there is a result. The
+          status-bar "Get the full report" button scrolls here. */}
+      <div id="range-report" style={{ marginTop: 18 }}>
+        {state.status === 'done' && (
+          <LeadCapture agentLabel={state.agentLabel || agentLabel} scorecardId={scorecardId} />
+        )}
       </div>
     </div>
   );

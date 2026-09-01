@@ -658,3 +658,17 @@
     scroll-behavior: auto !important;
   }
 }
+
+/* Range summary row: compact cards that reflow to fill the width, so a short
+   panel next to a tall one never leaves a big empty column. */
+.range-summary {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 18px;
+}
+@media (min-width: 900px) {
+  .range-summary {
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    align-items: start;
+  }
+}
