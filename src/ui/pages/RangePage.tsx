@@ -12,6 +12,7 @@ import { hostSource, isWebMcpAvailable } from '../../webmcp/shim.ts';
 import { buildReport, sealReport } from '../../range/report.ts';
 import { saveScorecard, fetchPremiumCorpus } from '../../data/api.ts';
 import { buildFullCorpus, CORPUS } from '../../range/corpusLoader.ts';
+import type { LevelDefinition } from '../../range/level.ts';
 import { shouldSaveRun } from '../persist.ts';
 import type { HostSource } from '../../webmcp/types.ts';
 import { Trace } from '../Trace.tsx';
@@ -20,6 +21,7 @@ import { Scorecard } from '../Scorecard.tsx';
 import { Controls } from '../Controls.tsx';
 import { Leaderboard } from '../Leaderboard.tsx';
 import { LeadCapture } from '../LeadCapture.tsx';
+import { BringYourOwnAttack } from '../BringYourOwnAttack.tsx';
 
 const HOST_LABEL: Record<HostSource, string> = {
   document: 'native · document.modelContext',
@@ -41,13 +43,19 @@ export function RangePage() {
   const nativeHost = source === 'document' || source === 'navigator';
 
   const [premiumCount, setPremiumCount] = useState(0);
+  // Raw specs added on top of the bundled public corpus: fetched premium specs
+  // and any the visitor pastes via "Bring your own attack". One source of truth,
+  // rebuilt into the running corpus below.
+  const [extraSpecs, setExtraSpecs] = useState<unknown[]>([]);
+  const [byoaIds, setByoaIds] = useState<string[]>([]);
+  const [corpusLevels, setCorpusLevels] = useState<LevelDefinition[]>(CORPUS);
 
   useEffect(() => session.subscribe(setState), [session]);
 
   // Premium corpus: if the visitor carries an entitlement token (?corpus_token=…
-  // or a saved one), fetch the gated premium specs and add them to this session's
-  // corpus. Public specs always run; premium is purely additive. The token is
-  // remembered so a returning entitled visitor keeps the extra levels.
+  // or a saved one), fetch the gated premium specs and add them. Public specs
+  // always run; premium is purely additive. The token is remembered so a
+  // returning entitled visitor keeps the extra levels.
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const fromUrl = params.get('corpus_token');
@@ -64,17 +72,31 @@ export function RangePage() {
     let cancelled = false;
     void fetchPremiumCorpus(token).then((specs) => {
       if (cancelled || specs.length === 0) return;
-      const full = buildFullCorpus(specs);
-      const added = full.length - CORPUS.length; // count LEVELS actually added (post-validate/dedup)
-      if (added <= 0) return;
       window.localStorage.setItem('trustwright_corpus_token', token);
-      session.setCorpus(full);
-      setPremiumCount(added);
+      setExtraSpecs((prev) => [...prev, ...specs]);
     });
     return () => {
       cancelled = true;
     };
   }, [session]);
+
+  // Rebuild the running corpus from public + extra specs whenever the extras
+  // change. Never mid-run (setCorpus is a no-op while running, and the level
+  // index must not shift under an armed level). buildFullCorpus re-validates and
+  // dedupes, so a bad or duplicate spec is dropped, never trusted.
+  useEffect(() => {
+    if (state.status === 'running') return;
+    const full = buildFullCorpus(extraSpecs);
+    session.setCorpus(full);
+    setCorpusLevels(full);
+    setPremiumCount(Math.max(0, full.length - CORPUS.length));
+  }, [extraSpecs, session, state.status]);
+
+  const addSpec = (spec: unknown) => {
+    setExtraSpecs((prev) => [...prev, spec]);
+    const id = (spec as { id?: unknown }).id;
+    if (typeof id === 'string') setByoaIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
+  };
 
   // Tear the session down on unmount: dispose any level still armed on the global
   // WebMCP host and clear the telemetry bus, so navigating away mid agent-run
@@ -168,7 +190,7 @@ export function RangePage() {
               style={{ marginLeft: 8, background: 'rgba(34,211,238,.14)', color: '#67e8f9', border: '1px solid rgba(34,211,238,.3)' }}
             >
               <span className="dot" style={{ background: 'currentColor' }} />
-              +{premiumCount} premium {premiumCount === 1 ? 'level' : 'levels'}
+              +{premiumCount} extra {premiumCount === 1 ? 'level' : 'levels'}
             </span>
           )}
         </p>
@@ -188,6 +210,7 @@ export function RangePage() {
             }}
             nativeHost={nativeHost}
           />
+          <BringYourOwnAttack onAdd={addSpec} disabled={state.status === 'running'} addedIds={byoaIds} />
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
@@ -200,7 +223,7 @@ export function RangePage() {
           {/* The attack visualization is the centerpiece: it sits right under the
               scorecard so a run is visible immediately. The raw trace follows it
               as the underlying evidence. */}
-          <AttackTheater bus={session.bus} live={state.status === 'running'} />
+          <AttackTheater bus={session.bus} live={state.status === 'running'} corpus={corpusLevels} />
           <Trace bus={session.bus} live={state.status === 'running'} />
           {state.status === 'done' && (
             <LeadCapture agentLabel={state.agentLabel || agentLabel} scorecardId={scorecardId} />

@@ -1,0 +1,124 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://trustwright.deepblocker.ai/attackspec.schema.json",
+  "title": "Trustwright AttackSpec",
+  "description": "A data-only description of a WebMCP tool-surface attack that the Trustwright range can run an agent against. A spec is inert: the engine interprets a CLOSED vocabulary of effects/conditions/triggers, so there is no code, no eval, no URLs, and the canary is engine-minted. Author one, drop it in src/range/corpus/public/ (or paste it into 'Bring your own attack'), and it runs unchanged on both the browser and HTTP paths.",
+  "type": "object",
+  "required": ["id", "specVersion", "category", "difficulty", "title", "brief", "mitigation", "task", "phases", "detection"],
+  "additionalProperties": false,
+  "properties": {
+    "id": { "type": "string", "description": "Unique short id, e.g. T8.", "minLength": 1, "maxLength": 8000 },
+    "specVersion": { "const": 1 },
+    "category": { "type": "string", "description": "Taxonomy class, e.g. tool-framing, tool-hijacking, name-spoofing." },
+    "difficulty": { "enum": ["easy", "medium", "hard"] },
+    "title": { "type": "string", "description": "Human title, e.g. 'The rug-pull'." },
+    "brief": { "type": "string", "description": "One line: what this tests. Shown to a human, never to the agent under test." },
+    "mitigation": { "type": "string", "description": "One line: how an agent should defend." },
+    "task": { "type": "string", "description": "The innocent instruction handed to the agent. The attack is hidden in the tool surface, not here." },
+    "flags": { "type": "array", "items": { "type": "string" }, "description": "Named booleans the spec can set/read during a run." },
+    "phases": { "type": "array", "minItems": 1, "maxItems": 8, "items": { "$ref": "#/$defs/phase" } },
+    "detection": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "How a verdict is decided from the run state (tool calls / flags only). fail => FAIL, else partial => PARTIAL, else PASS.",
+      "properties": {
+        "fail": { "$ref": "#/$defs/condition" },
+        "partial": { "$ref": "#/$defs/condition" }
+      }
+    },
+    "plays": {
+      "type": "array",
+      "description": "Optional scripted demos: a 'compliant' agent (which the attack should catch => FAIL) and a 'careful' one (which should resist => PASS). Every bundled level ships both.",
+      "items": { "$ref": "#/$defs/play" }
+    }
+  },
+  "$defs": {
+    "phase": {
+      "type": "object",
+      "required": ["id", "tools"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string" },
+        "tools": { "type": "array", "minItems": 1, "maxItems": 24, "items": { "$ref": "#/$defs/tool" } },
+        "next": {
+          "type": "object",
+          "required": ["phase", "on"],
+          "additionalProperties": false,
+          "description": "Advance to another phase (a surface swap) when a trigger fires.",
+          "properties": {
+            "phase": { "type": "string" },
+            "on": { "$ref": "#/$defs/trigger" }
+          }
+        }
+      }
+    },
+    "tool": {
+      "type": "object",
+      "required": ["name", "description"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string", "pattern": "^[A-Za-z0-9_.-]{1,128}$", "description": "ASCII only. Non-ASCII (e.g. a homoglyph) is rejected by design." },
+        "description": { "type": "string" },
+        "inputSchema": { "type": "object", "description": "A JSON Schema fragment for the tool's arguments." },
+        "annotations": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "readOnlyHint": { "type": "boolean", "description": "Advisory only, and can be a lie. Trustwright exploits exactly that." },
+            "untrustedContentHint": { "type": "boolean" }
+          }
+        },
+        "onCall": { "type": "array", "maxItems": 24, "items": { "$ref": "#/$defs/effect" }, "description": "Effects run when the agent calls this tool." }
+      }
+    },
+    "trigger": {
+      "oneOf": [
+        { "type": "object", "required": ["after", "ms"], "additionalProperties": false, "properties": { "after": { "const": "ms" }, "ms": { "type": "number", "minimum": 0, "maximum": 60000 } } },
+        { "type": "object", "required": ["after", "tool"], "additionalProperties": false, "properties": { "after": { "const": "call" }, "tool": { "type": "string" } } },
+        { "type": "object", "required": ["after", "flag"], "additionalProperties": false, "properties": { "after": { "const": "flag" }, "flag": { "type": "string" } } }
+      ]
+    },
+    "effect": {
+      "oneOf": [
+        { "type": "object", "required": ["type", "kind"], "additionalProperties": false, "properties": { "type": { "const": "emit" }, "kind": { "enum": ["tool_called", "tool_result", "toolchange", "canary_fired", "note"] }, "label": { "type": "string" }, "detail": { "type": "string" } } },
+        { "type": "object", "required": ["type", "text"], "additionalProperties": false, "properties": { "type": { "const": "return" }, "text": { "type": "string", "description": "The tool's result string. {{canary}} and {{flag}} interpolate." } } },
+        { "type": "object", "required": ["type"], "additionalProperties": false, "properties": { "type": { "const": "fireCanary" }, "hostile": { "type": "boolean" }, "label": { "type": "string" }, "detail": { "type": "string" } } },
+        { "type": "object", "required": ["type", "name"], "additionalProperties": false, "properties": { "type": { "const": "setFlag" }, "name": { "type": "string" }, "value": { "type": "string" }, "fromCapability": { "type": "string" } } },
+        { "type": "object", "required": ["type", "name", "as"], "additionalProperties": false, "properties": { "type": { "const": "runCapability" }, "name": { "enum": ["voice-detector"] }, "args": { "type": "object" }, "as": { "type": "string" } } },
+        { "type": "object", "required": ["type", "phase"], "additionalProperties": false, "properties": { "type": { "const": "advancePhase" }, "phase": { "type": "string" } } },
+        { "type": "object", "required": ["type", "cond", "then"], "additionalProperties": false, "properties": { "type": { "const": "when" }, "cond": { "$ref": "#/$defs/condition" }, "then": { "type": "array", "items": { "$ref": "#/$defs/effect" } }, "otherwise": { "type": "array", "items": { "$ref": "#/$defs/effect" } } } }
+      ]
+    },
+    "condition": {
+      "oneOf": [
+        { "type": "object", "required": ["type", "tool"], "additionalProperties": false, "properties": { "type": { "const": "called" }, "tool": { "type": "string" } } },
+        { "type": "object", "required": ["type", "first", "second"], "additionalProperties": false, "properties": { "type": { "const": "calledBefore" }, "first": { "type": "string" }, "second": { "type": "string" } } },
+        { "type": "object", "required": ["type", "name"], "additionalProperties": false, "properties": { "type": { "const": "flag" }, "name": { "type": "string" } } },
+        { "type": "object", "required": ["type", "name", "value"], "additionalProperties": false, "properties": { "type": { "const": "flagEquals" }, "name": { "type": "string" }, "value": { "type": "string" } } },
+        { "type": "object", "required": ["type"], "additionalProperties": false, "properties": { "type": { "const": "toolSetChanged" } } },
+        { "type": "object", "required": ["type"], "additionalProperties": false, "properties": { "type": { "const": "argHasCanary" } } },
+        { "type": "object", "required": ["type", "cond"], "additionalProperties": false, "properties": { "type": { "const": "not" }, "cond": { "$ref": "#/$defs/condition" } } },
+        { "type": "object", "required": ["type", "conds"], "additionalProperties": false, "properties": { "type": { "const": "allOf" }, "conds": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/condition" } } } },
+        { "type": "object", "required": ["type", "conds"], "additionalProperties": false, "properties": { "type": { "const": "anyOf" }, "conds": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/condition" } } } }
+      ]
+    },
+    "play": {
+      "type": "object",
+      "required": ["archetype", "steps"],
+      "additionalProperties": false,
+      "properties": {
+        "archetype": { "enum": ["compliant", "careful"] },
+        "steps": {
+          "type": "array",
+          "maxItems": 24,
+          "items": {
+            "type": "object",
+            "required": ["call"],
+            "additionalProperties": false,
+            "properties": { "call": { "type": "string" }, "input": { "type": "object" } }
+          }
+        }
+      }
+    }
+  }
+}

@@ -16,6 +16,7 @@ import { useEffect, useState } from 'react';
 import type { TelemetryBus, TelemetryEvent } from '../range/telemetry.ts';
 import { resolveHost } from '../webmcp/shim.ts';
 import { levelById, CORPUS } from '../range/corpusLoader.ts';
+import type { LevelDefinition } from '../range/level.ts';
 import type { RegisteredTool } from '../webmcp/types.ts';
 
 type Verdict = 'PASS' | 'FAIL' | 'PARTIAL' | 'SKIPPED';
@@ -71,7 +72,15 @@ interface Surface {
   current: Set<string>; // names still registered right now (others were swapped away)
 }
 
-export function AttackTheater({ bus, live }: { bus: TelemetryBus; live: boolean }) {
+export function AttackTheater({
+  bus,
+  live,
+  corpus = CORPUS,
+}: {
+  bus: TelemetryBus;
+  live: boolean;
+  corpus?: LevelDefinition[];
+}) {
   const [snap, setSnap] = useState<TelemetryEvent[]>(() => bus.snapshot());
   const [surface, setSurface] = useState<Surface>({ order: [], current: new Set() });
 
@@ -105,7 +114,7 @@ export function AttackTheater({ bus, live }: { bus: TelemetryBus; live: boolean 
   }, [bus]);
 
   const d = derive(snap);
-  const level = d.levelId ? levelById(d.levelId) : null;
+  const level = d.levelId ? levelById(d.levelId, corpus) : null;
   const idle = !d.levelId;
 
   return (
@@ -115,7 +124,7 @@ export function AttackTheater({ bus, live }: { bus: TelemetryBus; live: boolean 
           <span className="dot dot-live" style={{ opacity: live ? 1 : 0.3 }} />
           <span className="card-title">Attack theater</span>
         </div>
-        <ResistanceMeter history={d.history} activeLevelId={d.levelId} />
+        <ResistanceMeter history={d.history} activeLevelId={d.levelId} levels={corpus} />
       </div>
 
       <div style={{ padding: '16px 18px 20px', minHeight: 300 }}>
@@ -418,9 +427,11 @@ function VerdictStamp({ verdict, trapNames }: { verdict: Verdict; trapNames: str
 function ResistanceMeter({
   history,
   activeLevelId,
+  levels,
 }: {
   history: Array<{ levelId: string; verdict: string }>;
   activeLevelId: string | null;
+  levels: LevelDefinition[];
 }) {
   const byId = new Map(history.map((h) => [h.levelId, h.verdict]));
   const decided = history.filter((h) => h.verdict !== 'SKIPPED');
@@ -429,8 +440,8 @@ function ResistanceMeter({
 
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-      <div style={{ display: 'flex', gap: 4 }}>
-        {CORPUS.map((l) => {
+      <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', maxWidth: 180, justifyContent: 'flex-end' }}>
+        {levels.map((l) => {
           const v = byId.get(l.id);
           const isActive = l.id === activeLevelId && v === undefined;
           const color =
