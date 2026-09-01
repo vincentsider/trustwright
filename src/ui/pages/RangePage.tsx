@@ -23,6 +23,7 @@ import { Leaderboard } from '../Leaderboard.tsx';
 import { LeadCapture } from '../LeadCapture.tsx';
 import { BringYourOwnAttack } from '../BringYourOwnAttack.tsx';
 import { AgentRisk } from '../AgentRisk.tsx';
+import { RangeStatusBar } from '../RangeStatusBar.tsx';
 
 const HOST_LABEL: Record<HostSource, string> = {
   document: 'native · document.modelContext',
@@ -50,6 +51,10 @@ export function RangePage() {
   const [extraSpecs, setExtraSpecs] = useState<unknown[]>([]);
   const [byoaIds, setByoaIds] = useState<string[]>([]);
   const [corpusLevels, setCorpusLevels] = useState<LevelDefinition[]>(CORPUS);
+  // Setup (how-to-run + bring-your-own-attack) is pre-run, not live status. Open
+  // by default so a first visitor sees how to start; auto-collapses once a run
+  // begins so the live dashboard owns the viewport.
+  const [setupOpen, setSetupOpen] = useState(true);
 
   useEffect(() => session.subscribe(setState), [session]);
 
@@ -139,6 +144,21 @@ export function RangePage() {
     };
   }, [session]);
 
+  // Collapse the setup panel the moment a run starts, so the live view owns the
+  // screen (both demo and agent-driven runs flip status to 'running').
+  useEffect(() => {
+    if (state.status === 'running') setSetupOpen(false);
+  }, [state.status]);
+
+  const scrollToId = (id: string) => {
+    if (typeof document !== 'undefined') document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  };
+  const onRunTest = () => {
+    setSetupOpen(true);
+    setTimeout(() => scrollToId('range-setup'), 40);
+  };
+  const onGetReport = () => scrollToId('range-report');
+
   const run = async (kind: 'compliant' | 'careful') => {
     if (state.status === 'running' || savingRef.current) return;
     setScorecardId(null);
@@ -199,46 +219,79 @@ export function RangePage() {
         </p>
       </header>
 
-      <div className="grid-main">
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-          <Controls
-            status={state.status}
-            agentLabel={agentLabel}
-            currentLevelId={state.currentLevelId}
-            onAgentLabel={setAgentLabel}
-            onRun={run}
-            onReset={() => {
-              session.reset();
-              setScorecardId(null);
-            }}
-            nativeHost={nativeHost}
-          />
-          <BringYourOwnAttack
-            onAdd={addSpec}
-            disabled={state.status === 'running'}
-            addedIds={byoaIds}
-            existingIds={[...new Set([...corpusLevels.map((l) => l.id), ...byoaIds])]}
-          />
+      {/* Verdict-first status bar: "is my agent passing?" pinned at the top. */}
+      <div style={{ marginTop: 6 }}>
+        <RangeStatusBar
+          scorecard={scorecard}
+          status={state.status}
+          agentLabel={state.agentLabel || agentLabel}
+          corpus={corpusLevels}
+          currentLevelId={state.currentLevelId}
+          onRunTest={onRunTest}
+          onGetReport={onGetReport}
+        />
+      </div>
+
+      {/* Setup — how to run + bring your own attack. Collapsible; pre-run, not
+          live status, so it yields the viewport once a run starts. */}
+      <section id="range-setup" className="card" style={{ marginTop: 18 }}>
+        <div
+          className="card-head"
+          style={{ cursor: 'pointer', marginBottom: setupOpen ? undefined : 0 }}
+          role="button"
+          tabIndex={0}
+          onClick={() => setSetupOpen((o) => !o)}
+          onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && setSetupOpen((o) => !o)}
+        >
+          <span className="card-title">Run a test</span>
+          <span className="mono" style={{ fontSize: 11, color: 'var(--signal-bright)' }}>
+            {setupOpen ? 'hide' : 'how to run · demo · bring your own attack'}
+          </span>
         </div>
+        {setupOpen && (
+          <div className="setup-grid" style={{ marginTop: 8 }}>
+            <Controls
+              status={state.status}
+              agentLabel={agentLabel}
+              currentLevelId={state.currentLevelId}
+              onAgentLabel={setAgentLabel}
+              onRun={run}
+              onReset={() => {
+                session.reset();
+                setScorecardId(null);
+              }}
+              nativeHost={nativeHost}
+            />
+            <BringYourOwnAttack
+              onAdd={addSpec}
+              disabled={state.status === 'running'}
+              addedIds={byoaIds}
+              existingIds={[...new Set([...corpusLevels.map((l) => l.id), ...byoaIds])]}
+            />
+          </div>
+        )}
+      </section>
+
+      {/* The live dashboard: the Attack Theater is the hero (wide column); the
+          rail carries the plain-language consequence, the bounded trace, the
+          scorecard detail, the leaderboard, and the report CTA target. */}
+      <div className="grid-main" style={{ marginTop: 18 }}>
+        <AttackTheater bus={session.bus} live={state.status === 'running'} corpus={corpusLevels} />
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-          <Leaderboard refreshKey={leaderboardKey} />
+          <AgentRisk results={scorecard.results} corpus={corpusLevels} />
+          <Trace bus={session.bus} live={state.status === 'running'} />
           <Scorecard
             scorecard={scorecard}
             agentLabel={state.agentLabel || agentLabel}
             onDownloadReport={state.status === 'done' ? downloadReport : undefined}
           />
-          {/* Plain-language consequences of how the agent did (self-hides until a
-              level has a verdict). */}
-          <AgentRisk results={scorecard.results} corpus={corpusLevels} />
-          {/* The attack visualization is the centerpiece: it sits right under the
-              scorecard so a run is visible immediately. The raw trace follows it
-              as the underlying evidence. */}
-          <AttackTheater bus={session.bus} live={state.status === 'running'} corpus={corpusLevels} />
-          <Trace bus={session.bus} live={state.status === 'running'} />
-          {state.status === 'done' && (
-            <LeadCapture agentLabel={state.agentLabel || agentLabel} scorecardId={scorecardId} />
-          )}
+          <Leaderboard refreshKey={leaderboardKey} />
+          <div id="range-report">
+            {state.status === 'done' && (
+              <LeadCapture agentLabel={state.agentLabel || agentLabel} scorecardId={scorecardId} />
+            )}
+          </div>
         </div>
       </div>
     </div>

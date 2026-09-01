@@ -632,3 +632,29 @@
 .tw-tool-card { animation: tw-swapin 0.28s ease both; }
 .tw-tool-card.called { animation: tw-callpulse 0.9s ease-out; }
 .tw-tool-card.breached { animation: tw-breach 0.5s ease; }
+
+/* ── Range: setup grid + reduced motion ─────────────────────────────────────── */
+.setup-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+}
+@media (min-width: 900px) {
+  .setup-grid {
+    grid-template-columns: 1.4fr 1fr;
+    align-items: start;
+  }
+}
+
+/* Honor the OS "reduce motion" setting: make the attack-theater pulses, the
+   breach shake, the stamp, and every other animation effectively instant. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
