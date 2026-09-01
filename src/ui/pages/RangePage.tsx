@@ -13,7 +13,7 @@ import { buildReport, sealReport } from '../../range/report.ts';
 import { saveScorecard, fetchPremiumCorpus } from '../../data/api.ts';
 import { buildFullCorpus, CORPUS } from '../../range/corpusLoader.ts';
 import type { LevelDefinition } from '../../range/level.ts';
-import { shouldSaveRun } from '../persist.ts';
+import { shouldSaveRun, rankEligible } from '../persist.ts';
 import type { HostSource } from '../../webmcp/types.ts';
 import { Trace } from '../Trace.tsx';
 import { AttackTheater } from '../AttackTheater.tsx';
@@ -106,9 +106,11 @@ export function RangePage() {
   useEffect(() => {
     const runKey = session.generatedAt();
     if (!shouldSaveRun(state.status, runKey, lastSavedKeyRef.current, savingRef.current)) return;
-    // Only agent-driven runs are ranked. The scripted demo (either button, on any
-    // host, whatever its label) never touches the public leaderboard.
-    if (session.getRunKind() !== 'agent') return;
+    // Only a real agent-driven run against the OFFICIAL corpus is ranked: the
+    // scripted demo never posts, and neither does a run that included a
+    // user-authored "bring your own attack" level (which could be trivially
+    // passable and inflate the public score).
+    if (!rankEligible(session.getRunKind(), byoaIds.length)) return;
     savingRef.current = true;
     lastSavedKeyRef.current = runKey;
     const label = session.getState().agentLabel || 'agent';
@@ -121,7 +123,7 @@ export function RangePage() {
         savingRef.current = false;
       }
     })();
-  }, [state.status, state.results, session]);
+  }, [state.status, state.results, session, byoaIds.length]);
 
   useEffect(() => {
     let dispose: (() => void) | undefined;
@@ -210,7 +212,12 @@ export function RangePage() {
             }}
             nativeHost={nativeHost}
           />
-          <BringYourOwnAttack onAdd={addSpec} disabled={state.status === 'running'} addedIds={byoaIds} />
+          <BringYourOwnAttack
+            onAdd={addSpec}
+            disabled={state.status === 'running'}
+            addedIds={byoaIds}
+            existingIds={[...new Set([...corpusLevels.map((l) => l.id), ...byoaIds])]}
+          />
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>

@@ -18,3 +18,13 @@ export function shouldSaveRun(
 ): boolean {
   return status === 'done' && !saving && runKey !== lastSavedKey;
 }
+
+/**
+ * Whether a finished run may post to the PUBLIC leaderboard. Only a real
+ * agent-driven run (not the scripted demo) against the OFFICIAL corpus counts:
+ * a run that included any user-authored "bring your own attack" level is not
+ * ranked, so a trivially-passable self-written level cannot inflate a score.
+ */
+export function rankEligible(runKind: 'demo' | 'agent' | null, customLevelCount: number): boolean {
+  return runKind === 'agent' && customLevelCount === 0;
+}

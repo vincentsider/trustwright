@@ -85,22 +85,24 @@ export function AttackTheater({
   const [surface, setSurface] = useState<Surface>({ order: [], current: new Set() });
 
   useEffect(() => {
+    let cancelled = false; // a late getTools() must not set state after unmount
     const pull = (reset: boolean) => {
       const host = resolveHost().host;
       if (!host) {
-        if (reset) setSurface({ order: [], current: new Set() });
+        if (reset && !cancelled) setSurface({ order: [], current: new Set() });
         return;
       }
       void host
         .getTools()
-        .then((tools) =>
+        .then((tools) => {
+          if (cancelled) return;
           setSurface((prev) => {
             const base = reset ? [] : prev.order;
             const map = new Map(base.map((t) => [t.name, t]));
             for (const t of tools) map.set(t.name, t);
             return { order: [...map.values()], current: new Set(tools.map((t) => t.name)) };
-          }),
-        )
+          });
+        })
         .catch(() => {});
     };
 
@@ -110,7 +112,10 @@ export function AttackTheater({
       if (e.kind === 'level_started') pull(true);
       else if (e.kind === 'tool_called' || e.kind === 'toolchange') pull(false);
     });
-    return off;
+    return () => {
+      cancelled = true;
+      off();
+    };
   }, [bus]);
 
   const d = derive(snap);

@@ -1,11 +1,10 @@
 // src/ui/BringYourOwnAttack.tsx
 //
-// Crowd-sourcing, live: paste an AttackSpec (JSON) and add it to THIS run, so
-// anyone can test their agent against an attack they wrote — no PR, no deploy.
-// It is safe because a spec is inert DATA validated by the same closed-vocabulary
-// validator the bundled corpus uses (no eval, no URLs, no code, engine-minted
-// canary, bounded). validateSpec here gives instant feedback; the corpus builder
-// re-validates on add, so a bad spec is dropped, never trusted.
+// Crowd-sourcing, live: write an attack (as JSON) and run your agent against it
+// without a PR or a deploy. It is safe because a spec is inert DATA validated by
+// the same closed-vocabulary validator the bundled corpus uses (no eval, no
+// URLs, no code, engine-minted canary, bounded). validateSpec here gives instant
+// feedback; the corpus builder re-validates on add, so a bad spec is dropped.
 
 import { useState } from 'react';
 import { validateSpec } from '../range/attackSpec.ts';
@@ -42,10 +41,12 @@ export function BringYourOwnAttack({
   onAdd,
   disabled,
   addedIds,
+  existingIds,
 }: {
   onAdd: (spec: unknown) => void;
   disabled: boolean;
   addedIds: string[];
+  existingIds: string[];
 }) {
   const [open, setOpen] = useState(false);
   const [text, setText] = useState('');
@@ -59,7 +60,7 @@ export function BringYourOwnAttack({
     try {
       parsed = JSON.parse(text);
     } catch (e) {
-      setError(`Not valid JSON: ${(e as Error).message}`);
+      setError(`That is not valid JSON: ${(e as Error).message}`);
       return;
     }
     const v = validateSpec(parsed);
@@ -67,54 +68,63 @@ export function BringYourOwnAttack({
       setError(v.error);
       return;
     }
+    if (existingIds.includes(v.spec.id)) {
+      setError(`A level with id "${v.spec.id}" already exists. Give your attack a unique id.`);
+      return;
+    }
     onAdd(v.spec);
-    setOk(`Added level ${v.spec.id}. It will run at the end of the next gauntlet.`);
+    setOk(`Added "${v.spec.id}". Run the gauntlet (a Demo button, or your agent) and it appears as the last level.`);
   };
 
   return (
     <section className="card">
-      <div
-        className="card-head"
-        style={{ cursor: 'pointer' }}
-        onClick={() => setOpen((o) => !o)}
-        role="button"
-        tabIndex={0}
-        onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && setOpen((o) => !o)}
-      >
+      <div className="card-head" style={{ marginBottom: 8 }}>
         <span className="card-title">Bring your own attack</span>
-        <span className="mono" style={{ fontSize: 11, color: 'var(--ink-3)' }}>
-          {addedIds.length > 0 ? `${addedIds.length} added · ` : ''}
-          {open ? 'hide' : 'add a test'}
-        </span>
+        <button className="btn btn-ghost" style={{ padding: '5px 11px', fontSize: 12 }} onClick={() => setOpen((o) => !o)}>
+          {open ? 'Hide' : 'Write an attack'}
+        </button>
       </div>
 
+      <p style={{ fontSize: 12.5, color: 'var(--ink-2)', margin: 0, lineHeight: 1.5 }}>
+        The 8 levels above are just JSON. Write your own tool-surface attack, add it here, and your agent is
+        tested against it live. Nothing is saved on our servers, and a run that includes your own level is not
+        posted to the public leaderboard.
+      </p>
+
       {open && (
-        <div style={{ marginTop: 4 }}>
-          <p style={{ fontSize: 12.5, color: 'var(--ink-2)', margin: '0 0 10px', lineHeight: 1.5 }}>
-            Paste an AttackSpec (JSON). It is validated against a closed vocabulary (no code runs), then
-            added to this run. Write one, and your agent is tested against it live. See the{' '}
-            <a href="/attackspec.schema.json" target="_blank" rel="noopener noreferrer">
-              JSON schema
-            </a>{' '}
-            and the{' '}
-            <a
-              href="https://github.com/vincentsider/trustwright/blob/master/CONTRIBUTING-attacks.md"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              authoring guide
-            </a>
-            .
-          </p>
+        <div style={{ marginTop: 14 }}>
+          <ol style={{ margin: '0 0 12px', paddingLeft: 18, fontSize: 12.5, color: 'var(--ink-2)', lineHeight: 1.7 }}>
+            <li>
+              Click <b>Load example</b> (or paste your own), then <b>Validate &amp; add</b>.
+            </li>
+            <li>
+              Run the gauntlet — a <b>Demo</b> button, or tell your agent to run it. Your level runs last.
+            </li>
+            <li>
+              Watch it in the <b>Attack theater</b>. Format:{' '}
+              <a href="/attackspec.schema.json" target="_blank" rel="noopener noreferrer">
+                JSON schema
+              </a>{' '}
+              ·{' '}
+              <a
+                href="https://github.com/vincentsider/trustwright/blob/master/CONTRIBUTING-attacks.md"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                authoring guide
+              </a>
+              .
+            </li>
+          </ol>
           <textarea
             className="field"
             spellCheck={false}
             value={text}
             onChange={(e) => setText(e.target.value)}
-            placeholder="Paste an AttackSpec JSON, or load the example."
+            placeholder="Paste an AttackSpec JSON, or click Load example."
             style={{
               width: '100%',
-              minHeight: 160,
+              minHeight: 150,
               fontFamily: 'var(--mono)',
               fontSize: 12,
               lineHeight: 1.5,
@@ -122,9 +132,6 @@ export function BringYourOwnAttack({
             }}
           />
           <div style={{ display: 'flex', gap: 10, marginTop: 10, flexWrap: 'wrap' }}>
-            <button className="btn btn-primary" disabled={!text.trim() || disabled} onClick={submit}>
-              Validate &amp; add
-            </button>
             <button
               className="btn btn-ghost"
               onClick={() => {
@@ -134,6 +141,9 @@ export function BringYourOwnAttack({
               }}
             >
               Load example
+            </button>
+            <button className="btn btn-primary" disabled={!text.trim() || disabled} onClick={submit}>
+              Validate &amp; add
             </button>
           </div>
           {disabled && (
