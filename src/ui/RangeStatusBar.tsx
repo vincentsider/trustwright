@@ -50,7 +50,6 @@ export function RangeStatusBar({
   agentLabel,
   corpus,
   currentLevelId,
-  onRunTest,
   onGetReport,
 }: {
   scorecard: ScorecardData;
@@ -58,7 +57,6 @@ export function RangeStatusBar({
   agentLabel: string;
   corpus: LevelDefinition[];
   currentLevelId: string | null;
-  onRunTest: () => void;
   onGetReport: () => void;
 }) {
   const s = runStatus(scorecard, status, currentLevelId);
@@ -122,8 +120,9 @@ export function RangeStatusBar({
           return (
             <span
               key={l.id}
-              title={`${l.id}${v ? `: ${v}` : active ? ': in progress' : ''}`}
+              className="tw-step"
               style={{
+                position: 'relative',
                 display: 'inline-flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -138,10 +137,18 @@ export function RangeStatusBar({
                 border: `1px solid ${c}`,
                 background: v ? `color-mix(in srgb, ${c} 12%, transparent)` : 'transparent',
                 animation: active ? 'tw-glow 1.1s ease-in-out infinite' : 'none',
+                cursor: 'help',
               }}
             >
               {l.id}
               {glyph && <span style={{ marginLeft: 3 }}>{glyph}</span>}
+              <span className="tw-step-tip" role="tooltip">
+                <b style={{ color: 'var(--ink)' }}>
+                  {l.id} · {l.title}
+                </b>
+                {v && <span style={{ color: c, fontWeight: 700 }}> · {v}</span>}
+                <span style={{ display: 'block', marginTop: 4, color: 'var(--ink-3)' }}>{l.brief}</span>
+              </span>
             </span>
           );
         })}
@@ -155,15 +162,11 @@ export function RangeStatusBar({
           </div>
           <div style={{ fontSize: 10.5, color: 'var(--ink-3)', letterSpacing: '.04em' }}>RESISTANCE</div>
         </div>
-        {done ? (
+        {done && (
           <button className="btn btn-primary" style={{ padding: '7px 13px', fontSize: 12.5 }} onClick={onGetReport}>
             Get the full report
           </button>
-        ) : status !== 'running' ? (
-          <button className="btn btn-ghost" style={{ padding: '7px 13px', fontSize: 12.5 }} onClick={onRunTest}>
-            Run a test
-          </button>
-        ) : null}
+        )}
       </div>
     </section>
   );

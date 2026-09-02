@@ -35,7 +35,6 @@ const HOST_LABEL: Record<HostSource, string> = {
 export function RangePage() {
   const session = useMemo(() => new RangeSession(), []);
   const [state, setState] = useState<SessionState>(session.getState());
-  const [agentLabel, setAgentLabel] = useState('');
   const [scorecardId, setScorecardId] = useState<string | null>(null);
   const [leaderboardKey, setLeaderboardKey] = useState(0);
   const savingRef = useRef(false);
@@ -145,31 +144,19 @@ export function RangePage() {
   }, [session]);
 
   // Collapse the setup panel the moment a run starts, so the live view owns the
-  // screen (both demo and agent-driven runs flip status to 'running').
+  // screen (an agent-driven run flips status to 'running').
   useEffect(() => {
     if (state.status === 'running') setSetupOpen(false);
   }, [state.status]);
 
-  const scrollToId = (id: string) => {
-    if (typeof document !== 'undefined') document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-  };
-  const onRunTest = () => {
-    setSetupOpen(true);
-    setTimeout(() => scrollToId('range-setup'), 40);
-  };
-  const onGetReport = () => scrollToId('range-report');
-
-  const run = async (kind: 'compliant' | 'careful') => {
-    if (state.status === 'running' || savingRef.current) return;
-    setScorecardId(null);
-    const label = agentLabel.trim() || (nativeHost ? 'Connected agent' : 'Simulated agent');
-    await session.run(kind, label);
+  const onGetReport = () => {
+    if (typeof document !== 'undefined') document.getElementById('range-report')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
   };
 
   const scorecard = session.scorecard();
 
   const downloadReport = async () => {
-    const label = state.agentLabel || agentLabel || 'agent';
+    const label = state.agentLabel || 'agent';
     const sealed = await sealReport(
       buildReport(session.scorecard(), label, session.corpusVersion, session.generatedAt()),
     );
@@ -227,10 +214,9 @@ export function RangePage() {
         <RangeStatusBar
           scorecard={scorecard}
           status={state.status}
-          agentLabel={state.agentLabel || agentLabel}
+          agentLabel={state.agentLabel}
           corpus={corpusLevels}
           currentLevelId={state.currentLevelId}
-          onRunTest={onRunTest}
           onGetReport={onGetReport}
         />
       </div>
@@ -248,17 +234,13 @@ export function RangePage() {
         >
           <span className="card-title">Run a test</span>
           <span className="mono" style={{ fontSize: 11, color: 'var(--signal-bright)' }}>
-            {setupOpen ? 'hide' : 'how to run · demo · bring your own attack'}
+            {setupOpen ? 'hide' : 'how to run · bring your own attack'}
           </span>
         </div>
         {setupOpen && (
           <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 16 }}>
             <Controls
               status={state.status}
-              agentLabel={agentLabel}
-              currentLevelId={state.currentLevelId}
-              onAgentLabel={setAgentLabel}
-              onRun={run}
               onReset={() => {
                 session.reset();
                 setScorecardId(null);
@@ -279,7 +261,7 @@ export function RangePage() {
         /* Before a run there is nothing live to show, so the empty theater /
            trace / scorecard are NOT rendered. Just the leaderboard: real data,
            and a reason to test your own agent. */
-        <div style={{ marginTop: 18, maxWidth: 640, marginLeft: 'auto', marginRight: 'auto' }}>
+        <div style={{ marginTop: 18 }}>
           <Leaderboard refreshKey={leaderboardKey} />
         </div>
       ) : (
@@ -292,7 +274,7 @@ export function RangePage() {
               <AttackTheater bus={session.bus} live={state.status === 'running'} corpus={corpusLevels} />
               <Scorecard
                 scorecard={scorecard}
-                agentLabel={state.agentLabel || agentLabel}
+                agentLabel={state.agentLabel}
                 onDownloadReport={state.status === 'done' ? downloadReport : undefined}
               />
             </div>
@@ -306,7 +288,7 @@ export function RangePage() {
           {/* The report / lead capture, once there is a result. */}
           <div id="range-report" style={{ marginTop: 18 }}>
             {state.status === 'done' && (
-              <LeadCapture agentLabel={state.agentLabel || agentLabel} scorecardId={scorecardId} />
+              <LeadCapture agentLabel={state.agentLabel} scorecardId={scorecardId} />
             )}
           </div>
         </>
