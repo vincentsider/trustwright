@@ -275,23 +275,24 @@ export function RangePage() {
         )}
       </section>
 
-      {/* The live pair: the Attack Theater (hero) and the raw trace side by side.
-          They are of similar height, so neither column leaves a void. */}
+      {/* Two balanced columns: panels are distributed so both fill top-to-bottom
+          and no card is left next to a void. Left (hero): the live theater with
+          the full scorecard beneath it. Right: the raw trace, the plain-language
+          consequence, and the leaderboard. */}
       <div className="grid-main" style={{ marginTop: 18 }}>
-        <AttackTheater bus={session.bus} live={state.status === 'running'} corpus={corpusLevels} />
-        <Trace bus={session.bus} live={state.status === 'running'} />
-      </div>
-
-      {/* Summary row: the plain-language consequence, the scorecard detail, and
-          the leaderboard — compact cards that reflow, never a tall narrow rail. */}
-      <div className="range-summary" style={{ marginTop: 18 }}>
-        <AgentRisk results={scorecard.results} corpus={corpusLevels} />
-        <Scorecard
-          scorecard={scorecard}
-          agentLabel={state.agentLabel || agentLabel}
-          onDownloadReport={state.status === 'done' ? downloadReport : undefined}
-        />
-        <Leaderboard refreshKey={leaderboardKey} />
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+          <AttackTheater bus={session.bus} live={state.status === 'running'} corpus={corpusLevels} />
+          <Scorecard
+            scorecard={scorecard}
+            agentLabel={state.agentLabel || agentLabel}
+            onDownloadReport={state.status === 'done' ? downloadReport : undefined}
+          />
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+          <Trace bus={session.bus} live={state.status === 'running'} />
+          <AgentRisk results={scorecard.results} corpus={corpusLevels} />
+          <Leaderboard refreshKey={leaderboardKey} />
+        </div>
       </div>
 
       {/* The report / lead capture, appearing once there is a result. The
