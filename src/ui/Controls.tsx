@@ -168,11 +168,33 @@ export function Controls({ status, onReset, nativeHost }: ControlsProps) {
         </div>
       </div>
 
-      <p style={{ fontSize: 11, color: 'var(--ink-3)', marginTop: 14, lineHeight: 1.5 }}>
-        Note: some agents drive a page by injecting scripts. This site’s strict content-security policy
-        blocks that, so an agent’s trace may show “page script failed”. That is expected and does not
-        affect a real WebMCP run, which calls the tools directly.
-      </p>
+      <div
+        style={{
+          fontSize: 11.5,
+          color: 'var(--ink-3)',
+          marginTop: 14,
+          lineHeight: 1.55,
+          borderTop: '1px solid var(--hair-2)',
+          paddingTop: 12,
+        }}
+      >
+        <div style={{ fontWeight: 600, color: 'var(--ink-2)', marginBottom: 4 }}>How agents reach the tools</div>
+        <ul style={{ margin: 0, paddingLeft: 16, display: 'flex', flexDirection: 'column', gap: 4 }}>
+          <li>
+            A <b>native WebMCP agent</b> (e.g. ChatGPT desktop) calls <span style={{ fontFamily: 'var(--mono)' }}>document.modelContext</span>{' '}
+            directly. Nothing is injected, so it just works.
+          </li>
+          <li>
+            An agent that <b>injects a script</b> to reach the tools is blocked by this site’s strict content-security
+            policy by design (you may see “page script failed”). Use the HTTP path instead.
+          </li>
+          <li>
+            The HTTP path even runs from <b>inside the page</b> via same-origin{' '}
+            <span style={{ fontFamily: 'var(--mono)' }}>fetch</span>, so a browser agent whose own network egress is
+            sandboxed can still complete a run.
+          </li>
+        </ul>
+      </div>
     </section>
   );
 }
