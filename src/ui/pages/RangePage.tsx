@@ -252,7 +252,7 @@ export function RangePage() {
           </span>
         </div>
         {setupOpen && (
-          <div className="setup-grid" style={{ marginTop: 8 }}>
+          <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 16 }}>
             <Controls
               status={state.status}
               agentLabel={agentLabel}
@@ -275,33 +275,42 @@ export function RangePage() {
         )}
       </section>
 
-      {/* Two balanced columns: panels are distributed so both fill top-to-bottom
-          and no card is left next to a void. Left (hero): the live theater with
-          the full scorecard beneath it. Right: the raw trace, the plain-language
-          consequence, and the leaderboard. */}
-      <div className="grid-main" style={{ marginTop: 18 }}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-          <AttackTheater bus={session.bus} live={state.status === 'running'} corpus={corpusLevels} />
-          <Scorecard
-            scorecard={scorecard}
-            agentLabel={state.agentLabel || agentLabel}
-            onDownloadReport={state.status === 'done' ? downloadReport : undefined}
-          />
-        </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-          <Trace bus={session.bus} live={state.status === 'running'} />
-          <AgentRisk results={scorecard.results} corpus={corpusLevels} />
+      {state.status === 'idle' ? (
+        /* Before a run there is nothing live to show, so the empty theater /
+           trace / scorecard are NOT rendered. Just the leaderboard: real data,
+           and a reason to test your own agent. */
+        <div style={{ marginTop: 18, maxWidth: 640, marginLeft: 'auto', marginRight: 'auto' }}>
           <Leaderboard refreshKey={leaderboardKey} />
         </div>
-      </div>
+      ) : (
+        <>
+          {/* Two balanced columns, both filled top-to-bottom. Left (hero): the
+              live theater with the full scorecard beneath it. Right: the raw
+              trace, the plain-language consequence, and the leaderboard. */}
+          <div className="grid-main" style={{ marginTop: 18 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+              <AttackTheater bus={session.bus} live={state.status === 'running'} corpus={corpusLevels} />
+              <Scorecard
+                scorecard={scorecard}
+                agentLabel={state.agentLabel || agentLabel}
+                onDownloadReport={state.status === 'done' ? downloadReport : undefined}
+              />
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+              <Trace bus={session.bus} live={state.status === 'running'} />
+              <AgentRisk results={scorecard.results} corpus={corpusLevels} />
+              <Leaderboard refreshKey={leaderboardKey} />
+            </div>
+          </div>
 
-      {/* The report / lead capture, appearing once there is a result. The
-          status-bar "Get the full report" button scrolls here. */}
-      <div id="range-report" style={{ marginTop: 18 }}>
-        {state.status === 'done' && (
-          <LeadCapture agentLabel={state.agentLabel || agentLabel} scorecardId={scorecardId} />
-        )}
-      </div>
+          {/* The report / lead capture, once there is a result. */}
+          <div id="range-report" style={{ marginTop: 18 }}>
+            {state.status === 'done' && (
+              <LeadCapture agentLabel={state.agentLabel || agentLabel} scorecardId={scorecardId} />
+            )}
+          </div>
+        </>
+      )}
     </div>
   );
 }
