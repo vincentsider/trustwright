@@ -227,13 +227,20 @@ export default {
     // origins this worker serves can be answered here, so it grants nothing to
     // anyone else.
     if (url.pathname === '/.well-known/trustwright-challenge.txt' && req.method === 'GET') {
-      const o = await getOrigin(env, `https://${url.host}`);
-      if (o?.challenge_token) {
-        return new Response(o.challenge_token, {
-          headers: { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' },
-        });
+      // A failed DB read must be a 500, not a 404: the ownership probe treats
+      // 404 as "proof definitively absent" (starts the revocation grace clock
+      // on OUR OWN origin) but any other status as "unreachable" (harmless).
+      try {
+        const o = await getOrigin(env, `https://${url.host}`);
+        if (o?.challenge_token) {
+          return new Response(o.challenge_token, {
+            headers: { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' },
+          });
+        }
+        return new Response('not found', { status: 404 });
+      } catch {
+        return new Response('lookup failed', { status: 500 });
       }
-      return new Response('not found', { status: 404 });
     }
 
     // Everything else is the SPA. not_found_handling=single-page-application

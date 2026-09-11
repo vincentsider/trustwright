@@ -51,6 +51,13 @@ export function AuditWizard() {
       setNote({ kind: 'bad', text: data?.error ?? 'Could not start verification. Check the address and try again.' });
       return;
     }
+    // Already verified: skip straight to step 2 instead of telling the owner
+    // to publish a code their site is already serving.
+    if (data.already_verified) {
+      setVerified(target.origin);
+      setNote({ kind: 'ok', text: `${target.origin} is already verified. Continue to step 2.` });
+      return;
+    }
     setToken(data.token);
     setInstructions(data.instructions);
   };
@@ -95,7 +102,9 @@ export function AuditWizard() {
         ? "Trustwright opened your page but found no agent tools an outside visitor can see. Make sure your WebMCP tools register on page load (external script, not blocked by your CSP)."
         : status === 403
           ? 'That origin is not verified yet. Finish step 1 first.'
-          : data?.error ?? 'The scan could not complete. Try again in a moment.';
+          : data?.error === 'mint_daily_cap'
+            ? 'This origin hit its daily re-mint limit. Try again after midnight UTC (your current badge stays live).'
+            : data?.error ?? 'The scan could not complete. Try again in a moment.';
     setNote({ kind: 'bad', text: msg });
   };
 

@@ -49,8 +49,9 @@ const tools = [
   { name: 'add_payee', description: 'Add a payee to the account.' },
 ];
 
-/** Stub the Supabase REST calls; `verified` toggles the origin's state. */
-function stubDb(opts: { verified?: boolean; audit?: Record<string, unknown> | null; manifest?: Record<string, unknown> | null } = {}) {
+/** Stub the Supabase REST calls; `verified` toggles the origin's state and
+ *  `noRow` makes the origin lookup come back empty (a brand-new origin). */
+function stubDb(opts: { verified?: boolean; noRow?: boolean; audit?: Record<string, unknown> | null; manifest?: Record<string, unknown> | null } = {}) {
   const verifiedAt = opts.verified ? '2026-08-28T00:00:00Z' : null;
   vi.stubGlobal(
     'fetch',
@@ -61,9 +62,15 @@ function stubDb(opts: { verified?: boolean; audit?: Record<string, unknown> | nu
         return new Response(JSON.stringify(opts.manifest ? [opts.manifest] : []), { status: 200 });
       }
       if (url.includes('/rest/v1/origins') && method === 'GET') {
-        return new Response(JSON.stringify([{ origin: AUDITED, challenge_token: 'tok', verified_at: verifiedAt }]), { status: 200 });
+        const rows = opts.noRow ? [] : [{ origin: AUDITED, challenge_token: 'tok', verified_at: verifiedAt }];
+        return new Response(JSON.stringify(rows), { status: 200 });
       }
-      if (url.includes('/rest/v1/origins') && (method === 'POST' || method === 'PATCH')) {
+      if (url.includes('/rest/v1/origins') && method === 'PATCH') {
+        // setOriginVerified asks for representation to see how many rows the
+        // token-CAS matched; report one match by default.
+        return new Response(JSON.stringify([{ origin: AUDITED }]), { status: 200 });
+      }
+      if (url.includes('/rest/v1/origins') && method === 'POST') {
         return new Response(null, { status: 204 });
       }
       if (url.includes('/rest/v1/tool_audits') && method === 'POST') {
@@ -217,13 +224,45 @@ describe('Mode 2 — verify-origin + revoke + pubkey', () => {
     ).length;
   }
 
-  it('issues a challenge token with placement instructions', async () => {
-    stubDb();
+  it('issues a challenge token with placement instructions for a NEW origin', async () => {
+    stubDb({ noRow: true });
     const res = await worker.fetch(post('/api/verify-origin', { origin: AUDITED }), env(), ctx);
     expect(res.status).toBe(200);
     const out = (await res.json()) as { token: string; instructions: { wellKnown: { content: string } } };
     expect(out.token).toMatch(/^trustwright-verify-/);
     expect(out.instructions.wellKnown.content).toBe(out.token);
+  });
+
+  it('is idempotent for a PENDING origin: returns the stored token, writes nothing', async () => {
+    // Rotating a pending token would let a stranger grief an in-progress
+    // verification, and racing the owner's confirm mints a verified origin
+    // whose stored token no longer matches the served proof.
+    stubDb({ verified: false });
+    const res = await worker.fetch(post('/api/verify-origin', { origin: AUDITED }), env(), ctx);
+    expect(res.status).toBe(200);
+    const out = (await res.json()) as { token?: string; already_verified?: boolean };
+    expect(out.token).toBe('tok');
+    expect(out.already_verified).toBeUndefined(); // pending, not verified
+    expect(originWrites()).toBe(0);
+  });
+
+  it('fails CLOSED (502, no write) when the origin lookup itself fails', async () => {
+    // A read outage mapped to "no row" would re-open token rotation through
+    // the failure path — the lookup must throw and the handler must refuse.
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        if (url.includes('/rest/v1/origins') && (init?.method ?? 'GET') === 'GET') {
+          return new Response('oops', { status: 500 });
+        }
+        throw new Error(`unexpected fetch: ${init?.method ?? 'GET'} ${url}`);
+      }),
+    );
+    const res = await worker.fetch(post('/api/verify-origin', { origin: AUDITED }), env(), ctx);
+    expect(res.status).toBe(502);
+    expect(await res.json()).toMatchObject({ error: 'origin_lookup_failed' });
+    expect(originWrites()).toBe(0);
   });
 
   // SECURITY REGRESSION (2026-09-11 incident): the ownership re-check probes
@@ -269,6 +308,54 @@ describe('Mode 2 — verify-origin + revoke + pubkey', () => {
     expect(out.already_verified).toBe(true);
     expect(out.token).toBe('tok');
     expect(originWrites()).toBe(0);
+  });
+
+  /** Confirm-flow stub: pending origin with token 'tok', the site serves the
+   *  proof, DoH resolves public. `casRows` controls how many rows the
+   *  token-guarded verify PATCH matches (0 simulates a mid-flight re-key). */
+  function stubConfirmFlow(opts: { casRows: 0 | 1 }) {
+    const seen = { patchUrl: '' };
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        const method = init?.method ?? 'GET';
+        if (url.includes('/rest/v1/origins') && method === 'GET') {
+          return new Response(JSON.stringify([{ origin: AUDITED, challenge_token: 'tok', verified_at: null }]), {
+            status: 200,
+          });
+        }
+        if (url.startsWith(`${AUDITED}/.well-known/trustwright-challenge.txt`)) {
+          return new Response('tok', { status: 200 });
+        }
+        if (url.includes('cloudflare-dns.com')) {
+          // hostIsPublic A/AAAA lookups (public IP); TXT probe is not reached.
+          return new Response(JSON.stringify({ Answer: [{ type: 1, data: '93.184.216.34' }] }), { status: 200 });
+        }
+        if (url.includes('/rest/v1/origins') && method === 'PATCH') {
+          seen.patchUrl = url;
+          return new Response(JSON.stringify(opts.casRows ? [{ origin: AUDITED }] : []), { status: 200 });
+        }
+        throw new Error(`unexpected fetch: ${method} ${url}`);
+      }),
+    );
+    return seen;
+  }
+
+  it('confirm verifies a served proof, compare-and-set on the probed token', async () => {
+    const seen = stubConfirmFlow({ casRows: 1 });
+    const res = await worker.fetch(post('/api/verify-origin/confirm', { origin: AUDITED }), env(), ctx);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ origin: AUDITED, verified: true });
+    // The verify write is guarded by the exact token that was probed.
+    expect(seen.patchUrl).toContain('challenge_token=eq.tok');
+  });
+
+  it('confirm refuses (409) when the token was re-keyed between probe and write', async () => {
+    stubConfirmFlow({ casRows: 0 });
+    const res = await worker.fetch(post('/api/verify-origin/confirm', { origin: AUDITED }), env(), ctx);
+    expect(res.status).toBe(409);
+    expect(await res.json()).toMatchObject({ verified: false });
   });
 
   it('revoke requires the admin token', async () => {

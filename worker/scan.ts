@@ -230,7 +230,12 @@ export async function handleAuditSelf(req: Request, env: Env): Promise<Response>
   const target = validateTarget((body as { url?: unknown })?.url);
   if (!target) return jsonPublic({ error: 'invalid url' }, { status: 400, req });
 
-  const o = await getOrigin(env, target.origin);
+  let o: Awaited<ReturnType<typeof getOrigin>>;
+  try {
+    o = await getOrigin(env, target.origin);
+  } catch {
+    return jsonPublic({ error: 'origin_lookup_failed' }, { status: 502, req });
+  }
   if (!o || !o.verified_at) {
     return jsonPublic({ error: 'origin not verified — complete /api/verify-origin first' }, { status: 403, req });
   }
@@ -288,7 +293,12 @@ export async function handleAuditFromScan(req: Request, env: Env): Promise<Respo
   const target = validateTarget((body as { url?: unknown })?.url);
   if (!target) return jsonPublic({ error: 'invalid url' }, { status: 400, req });
 
-  const o = await getOrigin(env, target.origin);
+  let o: Awaited<ReturnType<typeof getOrigin>>;
+  try {
+    o = await getOrigin(env, target.origin);
+  } catch {
+    return jsonPublic({ error: 'origin_lookup_failed' }, { status: 502, req });
+  }
   if (!o || !o.verified_at) {
     return jsonPublic({ error: 'origin not verified — complete /api/verify-origin first' }, { status: 403, req });
   }

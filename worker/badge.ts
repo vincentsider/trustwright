@@ -147,33 +147,49 @@ export async function handleVerifyOrigin(req: Request, env: Env): Promise<Respon
   const origin = normalizeOrigin((body as { origin?: unknown })?.origin);
   if (!origin) return jsonPublic({ error: 'invalid origin' }, { status: 400, req });
 
-  // A verified origin's challenge token is load-bearing: the ownership
-  // re-check (worker/maintenance.ts) probes the live site against the STORED
-  // token, so rotating it here desyncs the proof the site is already serving
-  // and the badge gets revoked once the grace window passes. This endpoint is
-  // public, so it must NEVER rotate a verified origin's token — otherwise
-  // anyone (including an agent calling the site's own start_verification
-  // tool) can destroy any customer's badge just by naming their origin.
-  // Re-keying a verified origin is a deliberate operator act (x-admin-token).
-  // A body flag would not do: the endpoint is unauthenticated and the repo is
-  // public, so any caller could pass the flag. We return the EXISTING token so
-  // a legitimate owner can restore a lost proof file without a rotation.
-  const existing = await getOrigin(env, origin);
-  if (existing?.verified_at) {
+  // The public endpoint is fully IDEMPOTENT: an existing origin (pending or
+  // verified) always gets its STORED token back, never a rotation. Why:
+  //   - Verified: the ownership re-check (worker/maintenance.ts) probes the
+  //     live site against the stored token, so a public rotation desyncs the
+  //     proof the site is already serving and the badge gets revoked after the
+  //     grace window. Anyone (including an agent calling the site's own
+  //     start_verification tool) could destroy any customer's badge just by
+  //     naming their origin — the 2026-09-11 incident.
+  //   - Pending: a public rotation between the owner's confirm READ and the
+  //     verify WRITE would mint a verified-but-desynced origin (same revocation
+  //     later), and lets a stranger grief an in-progress verification.
+  // Rotation is a deliberate operator act (x-admin-token). A body flag would
+  // not do: the endpoint is unauthenticated and this repo is public, so any
+  // caller could pass the flag. Returning the stored token is safe — the token
+  // is published on the owner's site anyway, and possession grants nothing
+  // (ownership is proven by SERVING it) — and it lets a legitimate owner
+  // recover a lost proof file. A failed lookup THROWS (never null), so a DB
+  // blip cannot re-open the rotation via the failure path.
+  let existing: Awaited<ReturnType<typeof getOrigin>>;
+  try {
+    existing = await getOrigin(env, origin);
+  } catch {
+    return jsonPublic({ error: 'origin_lookup_failed' }, { status: 502, req });
+  }
+  if (existing) {
     const provided = req.headers.get('x-admin-token') ?? '';
     const adminOk = !!env.ADMIN_TOKEN && constantTimeEqual(provided, env.ADMIN_TOKEN);
     if (!adminOk) {
       return jsonPublic(
         {
           origin,
-          already_verified: true,
+          ...(existing.verified_at ? { already_verified: true } : {}),
           token: existing.challenge_token,
           instructions: {
             wellKnown: { path: '/.well-known/trustwright-challenge.txt', content: existing.challenge_token },
             dns: { record: `_trustwright.${new URL(origin).host}`, type: 'TXT', value: existing.challenge_token },
-            confirm: 'Already verified — keep this proof in place (re-publish it if it was removed).',
+            confirm: existing.verified_at
+              ? 'Already verified — keep this proof in place (re-publish it if it was removed).'
+              : 'POST /api/verify-origin/confirm { origin } once one is in place',
           },
-          note: 'This origin is already verified; its token is never rotated by this public endpoint.',
+          note: existing.verified_at
+            ? 'This origin is already verified; its token is never rotated by this public endpoint.'
+            : 'This origin already has a pending code (tokens are stable; re-keying is an operator act).',
         },
         { req },
       );
@@ -208,15 +224,30 @@ export async function handleVerifyOriginConfirm(req: Request, env: Env): Promise
   const body = await readJson(req);
   const origin = normalizeOrigin((body as { origin?: unknown })?.origin);
   if (!origin) return jsonPublic({ error: 'invalid origin' }, { status: 400, req });
-  const o = await getOrigin(env, origin);
+  let o: Awaited<ReturnType<typeof getOrigin>>;
+  try {
+    o = await getOrigin(env, origin);
+  } catch {
+    return jsonPublic({ error: 'origin_lookup_failed' }, { status: 502, req });
+  }
   if (!o) return jsonPublic({ error: 'request a challenge first' }, { status: 400, req });
   if (o.verified_at) return jsonPublic({ origin, verified: true }, { req });
   const ok = await checkOriginControl(origin, o.challenge_token);
   if (!ok) return jsonPublic({ origin, verified: false, error: 'challenge not found' }, { status: 200, req });
+  // CAS on the token we just probed: if it was re-keyed between our read and
+  // this write, verifying would record a proof the site is not serving (the
+  // re-check would read it as absent and revoke later). Refuse and retry.
+  let cas: boolean;
   try {
-    await setOriginVerified(env, origin);
+    cas = await setOriginVerified(env, origin, o.challenge_token);
   } catch {
     return jsonPublic({ error: 'persist_failed' }, { status: 502, req });
+  }
+  if (!cas) {
+    return jsonPublic(
+      { origin, verified: false, error: 'verification code changed mid-check — request a new code and try again' },
+      { status: 409, req },
+    );
   }
   return jsonPublic({ origin, verified: true }, { req });
 }
@@ -241,7 +272,12 @@ export async function handleAudit(req: Request, env: Env): Promise<Response> {
   }
 
   // Domain-control requirement: the origin must have proven ownership.
-  const o = await getOrigin(env, origin);
+  let o: Awaited<ReturnType<typeof getOrigin>>;
+  try {
+    o = await getOrigin(env, origin);
+  } catch {
+    return jsonPublic({ error: 'origin_lookup_failed' }, { status: 502, req });
+  }
   if (!o || !o.verified_at) {
     return jsonPublic({ error: 'origin not verified — complete /api/verify-origin first' }, { status: 403, req });
   }
@@ -362,7 +398,12 @@ export async function handleManifest(req: Request, env: Env): Promise<Response> 
   if (!reqOrigin || normalizeOrigin(reqOrigin) !== origin) {
     return jsonPublic({ error: 'manifest must be published from the origin' }, { status: 403, req });
   }
-  const o = await getOrigin(env, origin);
+  let o: Awaited<ReturnType<typeof getOrigin>>;
+  try {
+    o = await getOrigin(env, origin);
+  } catch {
+    return jsonPublic({ error: 'origin_lookup_failed' }, { status: 502, req });
+  }
   if (!o || !o.verified_at) return jsonPublic({ error: 'origin not verified' }, { status: 403, req });
 
   const fingerprint = typeof b.fingerprint === 'string' && FINGERPRINT_RE.test(b.fingerprint) ? b.fingerprint : null;

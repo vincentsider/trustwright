@@ -33,22 +33,35 @@ export async function upsertOriginChallenge(env: Env, origin: string, token: str
   if (!resp.ok) throw new Error(`origins upsert failed: ${resp.status}`);
 }
 
+/** The origin row, or null when NO ROW EXISTS. A failed read THROWS — it must
+ *  never be mistaken for "no row": handleVerifyOrigin treats "no row" as
+ *  license to mint a token, so a read outage silently mapped to null would
+ *  re-open the verified-token-rotation hole via the failure path. */
 export async function getOrigin(env: Env, origin: string): Promise<OriginRow | null> {
   const q = `origins?origin=eq.${encodeURIComponent(origin)}&select=origin,challenge_token,verified_at&limit=1`;
   const resp = await fetch(sbUrl(env, q), { headers: sbHeaders(env) });
-  if (!resp.ok) return null;
+  if (!resp.ok) throw new Error(`origins read failed: ${resp.status}`);
   const rows = (await resp.json()) as OriginRow[];
   return rows[0] ?? null;
 }
 
-export async function setOriginVerified(env: Env, origin: string): Promise<void> {
+/** Mark an origin verified, compare-and-set on the challenge token. Returns
+ *  false when the stored token no longer equals `expectedToken` (someone
+ *  re-keyed between the caller's read and this write) — verifying then would
+ *  record a proof the site is not actually serving, which the ownership
+ *  re-check would later read as absent and revoke. */
+export async function setOriginVerified(env: Env, origin: string, expectedToken: string): Promise<boolean> {
   const now = new Date().toISOString();
-  const resp = await fetch(sbUrl(env, `origins?origin=eq.${encodeURIComponent(origin)}`), {
+  const filter =
+    `origins?origin=eq.${encodeURIComponent(origin)}` + `&challenge_token=eq.${encodeURIComponent(expectedToken)}`;
+  const resp = await fetch(sbUrl(env, filter), {
     method: 'PATCH',
-    headers: sbHeaders(env, { Prefer: 'return=minimal' }),
+    headers: sbHeaders(env, { Prefer: 'return=representation' }),
     body: JSON.stringify({ verified_at: now, proof_last_ok: now }),
   });
   if (!resp.ok) throw new Error(`origin verify failed: ${resp.status}`);
+  const rows = (await resp.json()) as unknown[];
+  return rows.length > 0;
 }
 
 export interface RecheckRow {
