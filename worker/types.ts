@@ -41,6 +41,7 @@ export interface Env {
   DEEPFAKE_ROUTER_URL?: string;
   DETECTOR_DAILY_CAP?: string; // integer as string
   SCAN_DAILY_CAP?: string; // global daily ceiling on /api/scan browser launches, default 500
+  MINT_DAILY_CAP?: string; // per-origin daily ceiling on self-serve badge mints, default 10
   // Mode 2 (badge). Public/non-secret.
   TRUSTWRIGHT_PUBKEY?: string; // Ed25519 public key (spki, base64) — safe to publish
   TRUSTWRIGHT_KEY_ID?: string; // which key signed (default "k1")

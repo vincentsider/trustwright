@@ -287,4 +287,50 @@ describe('POST /api/audit/self', () => {
     expect(body.signature).toBeTypeOf('string');
     expect(state.auditInserted).toBe(true);
   });
+
+  /** Minimal KV stub for the per-origin daily mint ceiling. */
+  function kvStub() {
+    const store = new Map<string, string>();
+    return {
+      kv: {
+        get: async (k: string) => store.get(k) ?? null,
+        put: async (k: string, v: string) => {
+          store.set(k, v);
+        },
+      } as unknown as Env['DAILY'],
+      store,
+    };
+  }
+
+  it('refuses a mint past the per-origin daily cap without spending a browser session', async () => {
+    const state = stubDb({ verified: true });
+    scanResult({ host: 'polyfill', tools: scannedTools });
+    mockedScan.mockClear();
+    const { kv } = kvStub();
+    const resp = await worker.fetch(
+      post('/api/audit/self', { url: TARGET }),
+      env({ DAILY: kv, MINT_DAILY_CAP: '0' }),
+      ctx,
+    );
+    expect(resp.status).toBe(429);
+    expect(await resp.json()).toMatchObject({ error: 'mint_daily_cap' });
+    expect(mockedScan).not.toHaveBeenCalled(); // capped BEFORE the paid browser launch
+    expect(state.auditInserted).toBe(false);
+  });
+
+  it('mints under the cap and counts the mint against the origin', async () => {
+    const state = stubDb({ verified: true });
+    scanResult({ host: 'polyfill', tools: scannedTools });
+    const { kv, store } = kvStub();
+    const resp = await worker.fetch(
+      post('/api/audit/self', { url: TARGET }),
+      env({ DAILY: kv, MINT_DAILY_CAP: '10' }),
+      ctx,
+    );
+    expect(resp.status).toBe(200);
+    expect(state.auditInserted).toBe(true);
+    const capKeys = [...store.keys()].filter((k) => k.includes('mint:https://city.example'));
+    expect(capKeys).toHaveLength(1);
+    expect(store.get(capKeys[0]!)).toBe('1');
+  });
 });

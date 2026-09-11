@@ -234,6 +234,23 @@ export async function handleAuditSelf(req: Request, env: Env): Promise<Response>
   if (!o || !o.verified_at) {
     return jsonPublic({ error: 'origin not verified — complete /api/verify-origin first' }, { status: 403, req });
   }
+
+  // Per-origin daily mint ceiling. Every mint burns a paid Browser Rendering
+  // session, and this path is deliberately callable by anyone once the origin
+  // is verified (the one-click flow runs from OUR dashboard, so an
+  // Origin-header gate would break it, and headers are curl-spoofable
+  // anyway). Without a ceiling a distributed caller could loop re-mints and
+  // run up the bill; with it, spend is bounded at cap x verified origins.
+  // Checked AFTER the ownership gate so unverified spam cannot consume a
+  // victim's budget. If a legitimate owner ever hits the cap: wait for the
+  // UTC reset, or the operator can mint via the uncapped admin from-scan
+  // path. Enforced only when the KV counter is bound, like the scan cap.
+  if (env.DAILY) {
+    const cap = Number(env.MINT_DAILY_CAP ?? '10');
+    if (!(await underDailyCap(env, `mint:${target.origin}`, Number.isFinite(cap) ? cap : 10))) {
+      return jsonPublic({ error: 'mint_daily_cap' }, { status: 429, req });
+    }
+  }
   return mintScannedAudit(req, env, target);
 }
 
