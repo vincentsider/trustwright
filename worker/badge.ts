@@ -146,6 +146,40 @@ export async function handleVerifyOrigin(req: Request, env: Env): Promise<Respon
   const body = await readJson(req);
   const origin = normalizeOrigin((body as { origin?: unknown })?.origin);
   if (!origin) return jsonPublic({ error: 'invalid origin' }, { status: 400, req });
+
+  // A verified origin's challenge token is load-bearing: the ownership
+  // re-check (worker/maintenance.ts) probes the live site against the STORED
+  // token, so rotating it here desyncs the proof the site is already serving
+  // and the badge gets revoked once the grace window passes. This endpoint is
+  // public, so it must NEVER rotate a verified origin's token — otherwise
+  // anyone (including an agent calling the site's own start_verification
+  // tool) can destroy any customer's badge just by naming their origin.
+  // Re-keying a verified origin is a deliberate operator act (x-admin-token).
+  // A body flag would not do: the endpoint is unauthenticated and the repo is
+  // public, so any caller could pass the flag. We return the EXISTING token so
+  // a legitimate owner can restore a lost proof file without a rotation.
+  const existing = await getOrigin(env, origin);
+  if (existing?.verified_at) {
+    const provided = req.headers.get('x-admin-token') ?? '';
+    const adminOk = !!env.ADMIN_TOKEN && constantTimeEqual(provided, env.ADMIN_TOKEN);
+    if (!adminOk) {
+      return jsonPublic(
+        {
+          origin,
+          already_verified: true,
+          token: existing.challenge_token,
+          instructions: {
+            wellKnown: { path: '/.well-known/trustwright-challenge.txt', content: existing.challenge_token },
+            dns: { record: `_trustwright.${new URL(origin).host}`, type: 'TXT', value: existing.challenge_token },
+            confirm: 'Already verified — keep this proof in place (re-publish it if it was removed).',
+          },
+          note: 'This origin is already verified; its token is never rotated by this public endpoint.',
+        },
+        { req },
+      );
+    }
+  }
+
   const token = newChallengeToken();
   try {
     await upsertOriginChallenge(env, origin, token);

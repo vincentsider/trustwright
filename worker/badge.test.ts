@@ -207,6 +207,16 @@ describe('Mode 2 — badge state', () => {
 });
 
 describe('Mode 2 — verify-origin + revoke + pubkey', () => {
+  /** Count writes (POST/PATCH) the handler issued against the origins table. */
+  function originWrites(): number {
+    const calls = (globalThis.fetch as unknown as { mock: { calls: Array<[unknown, RequestInit | undefined]> } }).mock
+      .calls;
+    return calls.filter(
+      ([input, init]) =>
+        String(input).includes('/rest/v1/origins') && (init?.method === 'POST' || init?.method === 'PATCH'),
+    ).length;
+  }
+
   it('issues a challenge token with placement instructions', async () => {
     stubDb();
     const res = await worker.fetch(post('/api/verify-origin', { origin: AUDITED }), env(), ctx);
@@ -214,6 +224,51 @@ describe('Mode 2 — verify-origin + revoke + pubkey', () => {
     const out = (await res.json()) as { token: string; instructions: { wellKnown: { content: string } } };
     expect(out.token).toMatch(/^trustwright-verify-/);
     expect(out.instructions.wellKnown.content).toBe(out.token);
+  });
+
+  // SECURITY REGRESSION (2026-09-11 incident): the ownership re-check probes
+  // the live site against the STORED token, so a public caller who rotates a
+  // verified origin's token gets that origin's badge revoked after the grace
+  // window. Anyone could do this to any customer by naming their origin —
+  // including an agent innocently calling trustwright_start_verification.
+  it('never rotates a verified origin token on a public call', async () => {
+    stubDb({ verified: true });
+    const res = await worker.fetch(post('/api/verify-origin', { origin: AUDITED }), env(), ctx);
+    expect(res.status).toBe(200);
+    const out = (await res.json()) as { already_verified?: boolean; token?: string; instructions?: { wellKnown: { content: string } } };
+    expect(out.already_verified).toBe(true);
+    expect(out.token).toBe('tok'); // the STORED token, so the served proof stays valid
+    expect(out.instructions?.wellKnown.content).toBe('tok');
+    expect(originWrites()).toBe(0); // nothing written: the stored token is untouched
+  });
+
+  it('allows a deliberate admin re-key of a verified origin', async () => {
+    stubDb({ verified: true });
+    const res = await worker.fetch(
+      post('/api/verify-origin', { origin: AUDITED }, { 'x-admin-token': 'admin-secret' }),
+      env(),
+      ctx,
+    );
+    expect(res.status).toBe(200);
+    const out = (await res.json()) as { token: string; already_verified?: boolean };
+    expect(out.already_verified).toBeUndefined();
+    expect(out.token).toMatch(/^trustwright-verify-/);
+    expect(out.token).not.toBe('tok'); // a real rotation
+    expect(originWrites()).toBe(1); // exactly the upsert
+  });
+
+  it('a wrong admin token does not unlock rotation of a verified origin', async () => {
+    stubDb({ verified: true });
+    const res = await worker.fetch(
+      post('/api/verify-origin', { origin: AUDITED }, { 'x-admin-token': 'wrong' }),
+      env(),
+      ctx,
+    );
+    expect(res.status).toBe(200);
+    const out = (await res.json()) as { already_verified?: boolean; token?: string };
+    expect(out.already_verified).toBe(true);
+    expect(out.token).toBe('tok');
+    expect(originWrites()).toBe(0);
   });
 
   it('revoke requires the admin token', async () => {

@@ -135,7 +135,9 @@
       description:
         'Begin earning a Trustwright badge for a site you control: returns a one-time proof token and where to publish it (a well-known file or a DNS TXT record).',
       inputSchema: { type: 'object', properties: { origin: { type: 'string' } }, required: ['origin'] },
-      annotations: { readOnlyHint: true },
+      // No readOnlyHint: this tool STARTS a verification (a state-changing
+      // act). It was previously mislabelled read-only — exactly the ATS04
+      // "mislabeled effect" trap Trustwright itself tests other sites for.
       execute: function (input) {
         var o = toOrigin(String((input && input.origin) || ''));
         if (!o) return Promise.resolve('Provide a valid origin, e.g. https://example.com');
