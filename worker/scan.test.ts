@@ -297,10 +297,29 @@ describe('POST /api/audit/self', () => {
         put: async (k: string, v: string) => {
           store.set(k, v);
         },
-      } as unknown as Env['DAILY'],
+      } as unknown as NonNullable<Env['DAILY']>,
       store,
     };
   }
+
+  it('fails CLOSED (502, no browser spend) when the origin lookup fails', async () => {
+    scanResult({ host: 'polyfill', tools: scannedTools });
+    mockedScan.mockClear();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const u = String(input);
+        if (u.includes('/rest/v1/origins') && (init?.method ?? 'GET') === 'GET') {
+          return new Response('oops', { status: 500 });
+        }
+        throw new Error(`unexpected fetch: ${init?.method ?? 'GET'} ${u}`);
+      }),
+    );
+    const resp = await worker.fetch(post('/api/audit/self', { url: TARGET }), env(), ctx);
+    expect(resp.status).toBe(502);
+    expect(await resp.json()).toMatchObject({ error: 'origin_lookup_failed' });
+    expect(mockedScan).not.toHaveBeenCalled();
+  });
 
   it('refuses a mint past the per-origin daily cap without spending a browser session', async () => {
     const state = stubDb({ verified: true });

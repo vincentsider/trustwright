@@ -191,12 +191,17 @@ export interface VerifyInstructions {
   dns: { record: string; type: string; value: string };
 }
 
-/** Step 1: request an ownership challenge token for an origin. */
+/** Step 1: request an ownership challenge token for an origin. Idempotent:
+ *  an existing origin gets its STORED token back (with `already_verified` set
+ *  when it is already verified); the server never rotates on a public call. */
 export function requestVerification(origin: string) {
-  return mode2Post<{ origin: string; token: string; instructions: VerifyInstructions; error?: string }>(
-    '/api/verify-origin',
-    { origin },
-  );
+  return mode2Post<{
+    origin: string;
+    token: string;
+    instructions: VerifyInstructions;
+    already_verified?: boolean;
+    error?: string;
+  }>('/api/verify-origin', { origin });
 }
 
 /** Step 2: ask Trustwright to fetch the proof and mark the origin verified. */
